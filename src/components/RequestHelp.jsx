@@ -47,13 +47,7 @@ export default function RequestHelp() {
             if (!isEditing) return
 
             try {
-                if (!auth.currentUser) {
-                    // Wait for auth to initialize or redirect
-                    // For simplicity, assuming auth is handled by parent or will be checked on submit
-                    // But for fetching, we need to be sure. 
-                    // Ideally, we should wait for auth state. 
-                    // Here we'll just try to fetch.
-                }
+                // Auth check is now handled at component level
 
                 const docRef = doc(db, 'requests', id)
                 const docSnap = await getDoc(docRef)
@@ -168,6 +162,36 @@ export default function RequestHelp() {
     }
 
     const selectedCategory = categories.find(c => c.id === formData.category)
+
+    if (!auth.currentUser) {
+        return (
+            <div className="min-h-screen flex items-center justify-center bg-gray-50">
+                <div className="text-center p-8 max-w-md">
+                    <div className="w-16 h-16 bg-accent/10 rounded-full flex items-center justify-center mx-auto mb-6">
+                        <Shield className="text-accent" size={32} />
+                    </div>
+                    <h2 className="text-2xl font-bold text-dark mb-3">Authentication Required</h2>
+                    <p className="text-gray mb-8">
+                        Please log in to submit a help request. This helps us ensure the safety and trust of our community.
+                    </p>
+                    <div className="flex flex-col gap-3">
+                        <button
+                            onClick={() => navigate('/login')}
+                            className="w-full px-6 py-3 bg-accent text-white rounded-xl font-semibold hover:bg-accent/90 transition-colors shadow-um6p"
+                        >
+                            Log In
+                        </button>
+                        <button
+                            onClick={() => navigate('/signup')}
+                            className="w-full px-6 py-3 bg-white text-dark border border-gray/20 rounded-xl font-semibold hover:bg-gray-50 transition-colors"
+                        >
+                            Create Account
+                        </button>
+                    </div>
+                </div>
+            </div>
+        )
+    }
 
     if (initialLoading) {
         return (
