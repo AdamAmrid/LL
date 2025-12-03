@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { Link, useNavigate, useLocation } from 'react-router-dom'
 import { signInWithEmailAndPassword, signOut, sendEmailVerification } from 'firebase/auth'
-import { auth } from '../firebase'
+import { auth, getCallbackUrl } from '../firebase'
 import { Mail, Lock, LogIn, AlertCircle, RefreshCw, CheckCircle } from 'lucide-react'
 
 export default function Login() {
@@ -121,7 +121,7 @@ export default function Login() {
 
       // Send verification email
       const actionCodeSettings = {
-        url: window.location.origin + '/verify-email',
+        url: `${getCallbackUrl()}/verify-email`,
         handleCodeInApp: false,
       }
 

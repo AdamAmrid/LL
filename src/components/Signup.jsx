@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { createUserWithEmailAndPassword, sendEmailVerification, updateProfile } from 'firebase/auth'
 import { doc, setDoc } from 'firebase/firestore'
-import { auth, db } from '../firebase'
+import { auth, db, getCallbackUrl } from '../firebase'
 import { User, Mail, Lock, ChevronDown, AlertCircle, CheckCircle, CreditCard, Building2, GraduationCap, Briefcase } from 'lucide-react'
 
 const departments = [
@@ -183,7 +183,7 @@ export default function Signup() {
       // Try to send verification email, but don't block on failure
       try {
         const actionCodeSettings = {
-          url: window.location.origin + '/verify-email',
+          url: `${getCallbackUrl()}/verify-email`,
           handleCodeInApp: false,
         }
         await sendEmailVerification(user, actionCodeSettings)
@@ -218,7 +218,7 @@ export default function Signup() {
       console.error('❌ Signup error:', err)
       console.error('Error code:', err.code)
       console.error('Error message:', err.message)
-      
+
       let errorMessage = 'Failed to create account. Please try again.'
 
       if (err.code === 'auth/email-already-in-use') {
@@ -562,16 +562,16 @@ export default function Signup() {
       {/* Right Side - Visual Section */}
       <div className="hidden lg:flex lg:w-1/2 relative bg-gradient-to-br from-accent via-accent/90 to-orange/80">
         {/* Background Pattern/Image Overlay */}
-        <div 
+        <div
           className="absolute inset-0 bg-cover bg-center bg-no-repeat opacity-20"
           style={{
             backgroundImage: 'url("https://images.unsplash.com/photo-1523050854058-8df90110c9f1?ixlib=rb-4.0.3&auto=format&fit=crop&w=2000&q=80")',
           }}
         />
-        
+
         {/* Colored Overlay */}
         <div className="absolute inset-0 bg-gradient-to-br from-accent/85 via-accent/80 to-orange/75" />
-        
+
         {/* Content Overlay */}
         <div className="relative z-10 flex items-center justify-center p-12 text-center">
           <div className="max-w-lg">
