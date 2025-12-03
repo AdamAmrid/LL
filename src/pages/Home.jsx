@@ -21,26 +21,12 @@ export default function Home() {
       {/* Hero Section */}
       <div className="bg-white relative overflow-hidden">
         {/* Video Background */}
-        <video
-          autoPlay
-          loop
-          muted
-          playsInline
-          preload="auto"
+        {/* Image Background */}
+        <img
+          src="/um6p-pic.png"
+          alt="UM6P Campus"
           className="hero-video-bg"
-          poster="/solidarity-video-poster.jpg"
-          aria-label="Background video showing solidarity and community"
-          onError={(e) => {
-            // Hide video if it fails to load, show fallback background
-            e.target.style.display = 'none'
-            const fallback = e.target.nextElementSibling
-            if (fallback) fallback.style.display = 'block'
-          }}
-        >
-          <source src="/solidarity-video.mp4" type="video/mp4" />
-          <source src="/solidarity-video.webm" type="video/webm" />
-          Your browser does not support the video tag.
-        </video>
+        />
         {/* Fallback background if video fails */}
         <div className="hero-animated-bg-fallback" style={{ display: 'none' }} aria-hidden="true" />
         {/* Overlay for better text readability */}
