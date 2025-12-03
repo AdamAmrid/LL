@@ -2,6 +2,7 @@ import { useRef, useEffect } from 'react'
 import { ArrowRight, HandHeart, Users, Scale, Link as LinkIcon, Sparkles, Workflow } from 'lucide-react'
 import Section from '../components/Section'
 import { Link } from 'react-router-dom'
+import solidarityVideo from '../assets/solidarity-video.mp4'
 
 const values = [
   { icon: HandHeart, title: 'Empathy', desc: 'Understanding and sharing the feelings of our peers' },
@@ -40,7 +41,6 @@ export default function Home() {
           playsInline
           preload="auto"
           className="hero-video-bg"
-          poster="/solidarity-video-poster.jpg"
           aria-label="Background video showing solidarity and community"
           onError={(e) => {
             // Hide video if it fails to load, show fallback background
@@ -49,7 +49,7 @@ export default function Home() {
             if (fallback) fallback.style.display = 'block'
           }}
         >
-          <source src="/solidarity-video.mp4" type="video/mp4" />
+          <source src={solidarityVideo} type="video/mp4" />
           Your browser does not support the video tag.
         </video>
         {/* Fallback background if video fails */}
