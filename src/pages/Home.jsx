@@ -1,8 +1,6 @@
-import { useRef, useEffect } from 'react'
 import { ArrowRight, HandHeart, Users, Scale, Link as LinkIcon, Sparkles, Workflow } from 'lucide-react'
 import Section from '../components/Section'
 import { Link } from 'react-router-dom'
-import solidarityVideo from '../assets/solidarity-video.mp4'
 
 const values = [
   { icon: HandHeart, title: 'Empathy', desc: 'Understanding and sharing the feelings of our peers' },
@@ -18,29 +16,19 @@ const steps = [
 ]
 
 export default function Home() {
-  const videoRef = useRef(null)
-
-  useEffect(() => {
-    if (videoRef.current) {
-      videoRef.current.play().catch(error => {
-        console.log("Video autoplay failed:", error)
-      })
-    }
-  }, [])
-
   return (
     <div>
       {/* Hero Section */}
       <div className="bg-white relative overflow-hidden">
         {/* Video Background */}
         <video
-          ref={videoRef}
           autoPlay
           loop
           muted
           playsInline
           preload="auto"
           className="hero-video-bg"
+          poster="/solidarity-video-poster.jpg"
           aria-label="Background video showing solidarity and community"
           onError={(e) => {
             // Hide video if it fails to load, show fallback background
@@ -49,7 +37,8 @@ export default function Home() {
             if (fallback) fallback.style.display = 'block'
           }}
         >
-          <source src={solidarityVideo} type="video/mp4" />
+          <source src="/solidarity-video.mp4" type="video/mp4" />
+          <source src="/solidarity-video.webm" type="video/webm" />
           Your browser does not support the video tag.
         </video>
         {/* Fallback background if video fails */}
