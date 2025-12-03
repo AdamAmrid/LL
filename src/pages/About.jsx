@@ -34,15 +34,15 @@ export default function About() {
       {/* Mission Section */}
       <Section id="mission" title="Our Mission" className="py-8">
         <div className="reveal bg-gradient-to-br from-white to-secondary rounded-2xl p-8 sm:p-10 shadow-um6p border border-gray/10">
-          <p className="text-lg text-gray leading-relaxed mb-8 max-w-4xl">
+          <p className="text-lg text-center mx-auto text-gray leading-relaxed mb-8 max-w-4xl">
             To build and sustain a digital and human network where UM6P students can request or offer help—such as books, tutoring, advice, or emotional support—through an online platform and collaborative on-campus activities. The mission is to turn everyday acts of help into a structured, continuous system of care and cooperation.
           </p>
-          
+
           {/* Mission Icons */}
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
             {[BookOpen, GraduationCap, Lightbulb, Smile].map((Icon, i) => (
-              <div 
-                key={i} 
+              <div
+                key={i}
                 className="flex flex-col items-center justify-center gap-3 bg-white rounded-xl p-6 shadow-sm border border-gray/10 hover:shadow-md hover:-translate-y-1 hover:border-accent/30 transition-all duration-300 cursor-default group"
               >
                 <div className="h-12 w-12 rounded-xl bg-accent/10 flex items-center justify-center group-hover:bg-accent/20 transition-colors">
@@ -61,16 +61,15 @@ export default function About() {
         </p>
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
           {supportTypes.map(({ icon: Icon, title, desc, emoji, color }, idx) => (
-            <div 
-              key={idx} 
+            <div
+              key={idx}
               className="reveal bg-white rounded-xl p-6 shadow-um6p border border-gray/10 hover:shadow-lg hover:-translate-y-2 hover:border-accent/30 transition-all duration-300 cursor-default group"
             >
               <div className="flex items-start gap-4 mb-4">
-                <div className={`h-12 w-12 rounded-xl flex items-center justify-center flex-shrink-0 transition-colors ${
-                  color === 'accent' 
-                    ? 'bg-accent/10 group-hover:bg-accent/20' 
+                <div className={`h-12 w-12 rounded-xl flex items-center justify-center flex-shrink-0 transition-colors ${color === 'accent'
+                    ? 'bg-accent/10 group-hover:bg-accent/20'
                     : 'bg-orange/10 group-hover:bg-orange/20'
-                }`}>
+                  }`}>
                   <Icon className={`${color === 'accent' ? 'text-accent' : 'text-orange'} transition-transform duration-300 group-hover:scale-110`} size={24} />
                 </div>
                 <div className="flex-1">
