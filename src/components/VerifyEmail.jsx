@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import { useSearchParams, useNavigate } from 'react-router-dom'
 import { applyActionCode, checkActionCode, reload } from 'firebase/auth'
 import { auth } from '../firebase'
@@ -10,6 +10,7 @@ export default function VerifyEmail() {
   const navigate = useNavigate()
   const [status, setStatus] = useState('loading') // loading, success, error
   const [errorMessage, setErrorMessage] = useState('')
+  const effectRan = useRef(false)
 
   useEffect(() => {
     const verifyEmail = async () => {
@@ -81,7 +82,7 @@ export default function VerifyEmail() {
         setStatus('error')
 
         if (err.code === 'auth/invalid-action-code') {
-          setErrorMessage('This verification link has expired, been used already, or is invalid. Please request a new verification email from the login page.')
+          setErrorMessage('The verification link is invalid or has already been used. Your account might already be verified. Please try logging in.')
         } else if (err.code === 'auth/expired-action-code') {
           setErrorMessage('This verification link has expired. Please request a new verification email from the login page.')
         } else if (err.code === 'auth/user-disabled') {
@@ -91,6 +92,9 @@ export default function VerifyEmail() {
         }
       }
     }
+
+    if (effectRan.current) return
+    effectRan.current = true
 
     verifyEmail()
   }, [searchParams, navigate])
