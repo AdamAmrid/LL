@@ -82,7 +82,20 @@ export default function VerifyEmail() {
         setStatus('error')
 
         if (err.code === 'auth/invalid-action-code') {
-          setErrorMessage('The verification link is invalid or has already been used. Your account might already be verified. Please try logging in.')
+          // It's likely the link was already used (e.g. by a scanner). 
+          // Treat this as a "soft success" and redirect to login.
+          console.log('⚠️ Invalid action code - likely already used. Redirecting to login...')
+          setStatus('success') // Show success/loading state briefly
+
+          setTimeout(() => {
+            navigate('/login', {
+              state: {
+                successMessage: 'Verification link processed. Please log in.'
+              },
+              replace: true
+            })
+          }, 1500)
+          return
         } else if (err.code === 'auth/expired-action-code') {
           setErrorMessage('This verification link has expired. Please request a new verification email from the login page.')
         } else if (err.code === 'auth/user-disabled') {
@@ -121,9 +134,9 @@ export default function VerifyEmail() {
                 <CheckCircle className="text-green-600" size={32} />
               </div>
               <h1 className="font-mont font-extrabold text-2xl sm:text-3xl text-dark mb-2">
-                Email Verified Successfully!
+                Email Verified
               </h1>
-              <p className="text-gray text-sm">Redirecting to your account...</p>
+              <p className="text-gray text-sm">Redirecting to login...</p>
             </>
           )}
 
