@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { createUserWithEmailAndPassword, sendEmailVerification, updateProfile } from 'firebase/auth'
+import { createUserWithEmailAndPassword, sendEmailVerification, updateProfile, signOut } from 'firebase/auth'
 import { doc, setDoc } from 'firebase/firestore'
 import { auth, db, getCallbackUrl } from '../firebase'
 import { User, Mail, Lock, ChevronDown, AlertCircle, CheckCircle, CreditCard, Building2, GraduationCap, Briefcase } from 'lucide-react'
@@ -193,9 +193,9 @@ export default function Signup() {
         // Continue anyway - don't block signup for email issues
       }
 
-      // DON'T sign out - keep user signed in so they can access account after verification
-      // The App.jsx will handle redirecting unverified users appropriately
-      console.log('✅ User remains signed in - will be able to access account after email verification')
+      // Sign out the user so they have to log in again after verifying
+      await signOut(auth)
+      console.log('✅ User signed out - must log in after verification')
 
       // Show success message
       setSuccess(true)

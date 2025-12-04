@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { Link, useNavigate, useLocation } from 'react-router-dom'
-import { signInWithEmailAndPassword, signOut, sendEmailVerification } from 'firebase/auth'
+import { signInWithEmailAndPassword, signOut, sendEmailVerification, reload } from 'firebase/auth'
 import { auth, getCallbackUrl } from '../firebase'
 import { Mail, Lock, LogIn, AlertCircle, RefreshCw, CheckCircle } from 'lucide-react'
 
@@ -57,7 +57,11 @@ export default function Login() {
         formData.password
       )
 
-      const user = userCredential.user
+      let user = userCredential.user
+
+      // Reload user to get the latest emailVerified status
+      await reload(user)
+      user = auth.currentUser
 
       // Check if email is verified
       if (!user.emailVerified) {
