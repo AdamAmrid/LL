@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react'
-import { collection, query, where, orderBy, getDocs } from 'firebase/firestore'
-import { db } from '../firebase'
+import { collection, query, where, addDoc, serverTimestamp, onSnapshot } from 'firebase/firestore'
+import { db, auth } from '../firebase'
 import Section from '../components/Section'
+import { useNavigate } from 'react-router-dom'
 import {
     BookOpen,
     Wrench,
@@ -10,7 +11,11 @@ import {
     Heart,
     Clock,
     Calendar,
-    User
+    User,
+    MessageSquare,
+    Send,
+    X,
+    Loader2
 } from 'lucide-react'
 
 const categoryIcons = {
@@ -26,36 +31,44 @@ export default function RequestsList() {
     const [loading, setLoading] = useState(true)
     const [error, setError] = useState(null)
 
-    useEffect(() => {
-        const fetchRequests = async () => {
-            try {
-                // Create a query against the collection.
-                // Note: You might need to create a composite index in Firestore for this query to work:
-                // Collection: requests, Fields: status Ascending, createdAt Descending
-                const q = query(
-                    collection(db, 'requests'),
-                    where('status', '==', 'open'),
-                    orderBy('createdAt', 'desc')
-                )
+    // Modal State
+    const [selectedRequest, setSelectedRequest] = useState(null)
+    const [offerMessage, setOfferMessage] = useState('')
+    const [isSubmitting, setIsSubmitting] = useState(false)
+    const [offerSent, setOfferSent] = useState(false)
 
-                const querySnapshot = await getDocs(q)
-                const requestsData = querySnapshot.docs.map(doc => ({
+    const navigate = useNavigate()
+
+    useEffect(() => {
+        setLoading(true)
+        // Create a query against the collection.
+        // We'll filter by status 'open'
+        const q = query(
+            collection(db, 'requests'),
+            where('status', '==', 'open')
+        )
+
+        // Use onSnapshot for real-time updates
+        const unsubscribe = onSnapshot(q, (snapshot) => {
+            const requestsData = snapshot.docs
+                .map(doc => ({
                     id: doc.id,
                     ...doc.data(),
                     // Convert Timestamp to Date object if it exists
                     createdAt: doc.data().createdAt?.toDate() || new Date()
                 }))
+                .filter(req => req.userId !== auth.currentUser?.uid) // Exclude own requests
+                .sort((a, b) => b.createdAt - a.createdAt) // Sort client-side
 
-                setRequests(requestsData)
-                setLoading(false)
-            } catch (err) {
-                console.error('Error fetching requests:', err)
-                setError('Failed to load requests. Please try again later.')
-                setLoading(false)
-            }
-        }
+            setRequests(requestsData)
+            setLoading(false)
+        }, (err) => {
+            console.error('Error listening to requests:', err)
+            setError('Failed to load requests. Please try again later.')
+            setLoading(false)
+        })
 
-        fetchRequests()
+        return () => unsubscribe()
     }, [])
 
     const formatDate = (date) => {
@@ -65,6 +78,64 @@ export default function RequestsList() {
             hour: '2-digit',
             minute: '2-digit'
         }).format(date)
+    }
+
+    const handleOfferHelp = (request) => {
+        if (!auth.currentUser) {
+            navigate('/login')
+            return
+        }
+        if (request.userId === auth.currentUser.uid) {
+            alert("You can't offer help on your own request!")
+            return
+        }
+        setSelectedRequest(request)
+    }
+
+    const submitOffer = async (e) => {
+        e.preventDefault()
+        if (!offerMessage.trim()) return
+
+        setIsSubmitting(true)
+        try {
+            await addDoc(collection(db, 'offers'), {
+                requestId: selectedRequest.id,
+                requestOwnerId: selectedRequest.userId,
+                helperId: auth.currentUser.uid,
+                helperEmail: auth.currentUser.email,
+                helperName: auth.currentUser.displayName || auth.currentUser.email.split('@')[0], // Store name
+                message: offerMessage,
+                status: 'pending',
+                createdAt: serverTimestamp()
+            })
+
+            // Create Notification for Request Owner
+            await addDoc(collection(db, 'notifications'), {
+                recipientId: selectedRequest.userId,
+                type: 'offer_received',
+                title: 'New Offer for Help! 🤝',
+                message: `${auth.currentUser.displayName || 'A student'} has offered to help with your request: "${selectedRequest.category}". Check "My Requests" to view it.`,
+                requestId: selectedRequest.id,
+                read: false,
+                createdAt: serverTimestamp()
+            })
+
+            setIsSubmitting(false)
+            setOfferSent(true)
+
+            // Auto close after 2 seconds
+            setTimeout(() => {
+                setOfferSent(false)
+                setSelectedRequest(null)
+                setOfferMessage('')
+            }, 2000)
+        } catch (err) {
+            console.error('Error submitting offer:', err)
+            // Ideally replace this alert too, but user complained about the success one primarily.
+            // Let's stick to alert for error for now or console.error to avoid breaking if error handling is complex UI.
+            alert('Failed to send offer. Please try again.')
+            setIsSubmitting(false)
+        }
     }
 
     return (
@@ -138,8 +209,11 @@ export default function RequestsList() {
                                         </div>
                                     </div>
 
-                                    {/* Action Button (Placeholder for now) */}
-                                    <button className="mt-4 w-full py-2 rounded-lg border border-accent text-accent font-medium text-sm hover:bg-accent hover:text-white transition-colors">
+                                    {/* Action Button */}
+                                    <button
+                                        onClick={() => handleOfferHelp(request)}
+                                        className="mt-4 w-full py-2 rounded-lg border border-accent text-accent font-medium text-sm hover:bg-accent hover:text-white transition-colors"
+                                    >
                                         Offer Help
                                     </button>
                                 </div>
@@ -148,6 +222,103 @@ export default function RequestsList() {
                     </div>
                 )}
             </Section>
+
+            {/* Offer Help Modal */}
+            {selectedRequest && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-fade-in">
+                    <div className="bg-white rounded-2xl shadow-xl w-full max-w-md overflow-hidden animate-slide-up">
+                        <div className="px-6 py-4 border-b border-gray/10 flex items-center justify-between bg-secondary/30">
+                            <h3 className="font-bold text-lg text-dark flex items-center gap-2">
+                                <MessageSquare size={20} className="text-accent" />
+                                Offer Help
+                            </h3>
+                            <button
+                                onClick={() => setSelectedRequest(null)}
+                                className="text-gray hover:text-dark transition-colors"
+                            >
+                                <X size={20} />
+                            </button>
+                        </div>
+
+                        <div className="p-6">
+                            {offerSent ? (
+                                <div className="text-center py-8 animate-fade-in">
+                                    <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                                        <Send className="text-green-600" size={32} />
+                                    </div>
+                                    <h3 className="text-xl font-bold text-dark mb-2">Offer Sent!</h3>
+                                    <p className="text-gray">The student will be notified.</p>
+                                </div>
+                            ) : (
+                                <>
+                                    <div className="mb-4 space-y-3">
+                                        <div className="p-3 bg-secondary/50 rounded-lg text-sm text-gray/80 border border-gray/10">
+                                            <span className="font-semibold text-dark block mb-1">Replying to {selectedRequest.category} Request:</span>
+                                            "{selectedRequest.details.substring(0, 80)}{selectedRequest.details.length > 80 ? '...' : ''}"
+                                        </div>
+
+                                        <div className="flex flex-wrap gap-2 items-center text-sm">
+                                            {!selectedRequest.isAnonymous && selectedRequest.userEmail && (
+                                                <div className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-50 text-blue-700 rounded-full font-medium">
+                                                    <span className="w-1.5 h-1.5 rounded-full bg-blue-500" />
+                                                    {selectedRequest.userEmail}
+                                                </div>
+                                            )}
+                                            {selectedRequest.urgency === 'urgent' && (
+                                                <div className="flex items-center gap-1.5 px-3 py-1.5 bg-red-50 text-red-700 rounded-full font-medium">
+                                                    <Clock size={14} />
+                                                    Urgent Request
+                                                </div>
+                                            )}
+                                        </div>
+                                    </div>
+
+                                    <form onSubmit={submitOffer}>
+                                        <div className="mb-4">
+                                            <label className="block text-sm font-medium text-dark mb-1">
+                                                Message to Student
+                                            </label>
+                                            <textarea
+                                                value={offerMessage}
+                                                onChange={(e) => setOfferMessage(e.target.value)}
+                                                placeholder="Hi! I can help you with this. When are you free to meet?"
+                                                className="w-full px-4 py-3 rounded-xl border border-gray/20 focus:border-accent focus:ring-1 focus:ring-accent outline-none transition-all resize-none h-32 text-sm"
+                                                required
+                                            />
+                                            <p className="text-xs text-gray mt-1">
+                                                Your email ({auth.currentUser?.email}) will be shared if they accept.
+                                            </p>
+                                        </div>
+
+                                        <div className="flex gap-3">
+                                            <button
+                                                type="button"
+                                                onClick={() => setSelectedRequest(null)}
+                                                className="flex-1 py-2.5 rounded-xl border border-gray/20 text-dark font-semibold hover:bg-gray-50 transition-colors"
+                                            >
+                                                Cancel
+                                            </button>
+                                            <button
+                                                type="submit"
+                                                disabled={isSubmitting}
+                                                className="flex-1 py-2.5 rounded-xl bg-accent text-white font-semibold hover:bg-accent/90 transition-colors shadow-lg shadow-accent/20 flex items-center justify-center gap-2 disabled:opacity-70 disabled:cursor-not-allowed"
+                                            >
+                                                {isSubmitting ? (
+                                                    <Loader2 size={18} className="animate-spin" />
+                                                ) : (
+                                                    <>
+                                                        Send Offer <Send size={18} />
+                                                    </>
+                                                )}
+                                            </button>
+                                        </div>
+                                    </form>
+                                </>
+                            )}
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     )
 }

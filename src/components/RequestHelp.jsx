@@ -131,6 +131,7 @@ export default function RequestHelp() {
             const requestData = {
                 userId: auth.currentUser.uid,
                 userEmail: auth.currentUser.email,
+                userName: auth.currentUser.displayName || auth.currentUser.email.split('@')[0], // Store name
                 category: formData.category,
                 specificDetail: formData.specificDetail,
                 details: formData.details,
@@ -151,6 +152,7 @@ export default function RequestHelp() {
 
             setSuccess(true)
             setLoading(false)
+            window.scrollTo({ top: 0, behavior: 'smooth' })
 
             // Reset form after success (optional, or redirect)
             setTimeout(() => navigate('/my-requests'), 1500)

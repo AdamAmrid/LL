@@ -41,7 +41,7 @@ export default function App() {
     if (searchParams.get('apiKey')) params.set('apiKey', searchParams.get('apiKey'))
     if (searchParams.get('continueUrl')) params.set('continueUrl', searchParams.get('continueUrl'))
     if (searchParams.get('lang')) params.set('lang', searchParams.get('lang'))
-    
+
     return <Navigate to={`/verify-email?${params.toString()}`} replace />
   }
 
@@ -83,7 +83,7 @@ export default function App() {
 
   // Check if current route is an auth route
   const isAuthRoute = location.pathname === '/login' || location.pathname === '/signup' || location.pathname === '/verify-email'
-  
+
   // Redirect authenticated and verified users away from auth pages
   if (isAuthRoute && user && user.emailVerified) {
     return <Navigate to="/" replace />
