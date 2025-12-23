@@ -109,10 +109,17 @@ export default function ChatPage() {
                 read: false
             })
 
-            // 2. Update Chat Metadata
+            // 2. Update Chat Metadata & Revive Participants if needed
+            // Ensure all original participants are in the array (in case one deleted the chat)
+            // We know the participants should be [requesterId, helperId]
+            const allParticipants = [activeChat.requesterId, activeChat.helperId]
+            // Filter out any undefined (sanity check)
+            const uniqueParticipants = [...new Set(allParticipants.filter(Boolean))]
+
             await updateDoc(doc(db, 'chats', activeChat.id), {
                 lastMessage: msgText,
                 lastMessageTimestamp: serverTimestamp(),
+                participants: uniqueParticipants, // Resets participants to include everyone
                 // Simplistic unread count logic
                 [`unreadCount.${getOtherUserId(activeChat)}`]: (activeChat.unreadCount?.[getOtherUserId(activeChat)] || 0) + 1
             })

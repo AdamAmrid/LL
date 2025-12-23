@@ -18,7 +18,8 @@ import {
     Check,
     X,
     User,
-    AlertTriangle
+    AlertTriangle,
+    Star
 } from 'lucide-react'
 
 const categoryIcons = {
@@ -44,6 +45,15 @@ export default function MyRequests() {
         title: '',
         message: ''
     })
+
+    // Rating Modal State
+    const [ratingModal, setRatingModal] = useState({
+        isOpen: false,
+        requestId: null,
+        helperId: null,
+        rating: 0
+    })
+
     const [isProcessing, setIsProcessing] = useState(false)
 
     useEffect(() => {
@@ -251,6 +261,65 @@ export default function MyRequests() {
         )
     }
 
+    // Rating Logic
+    const handleComplete = (request, helperId) => {
+        setRatingModal({
+            isOpen: true,
+            requestId: request.id,
+            helperId: helperId,
+            rating: 0
+        })
+    }
+
+    const submitRating = async () => {
+        if (ratingModal.rating === 0) return
+        setIsProcessing(true)
+
+        try {
+            // 1. Create Rating
+            await addDoc(collection(db, 'ratings'), {
+                helperId: ratingModal.helperId,
+                requestId: ratingModal.requestId,
+                requesterId: auth.currentUser.uid,
+                rating: ratingModal.rating,
+                createdAt: serverTimestamp()
+            })
+
+            // 2. Update Request Status to 'completed'
+            await updateDoc(doc(db, 'requests', ratingModal.requestId), {
+                status: 'completed'
+            })
+
+            // 3. Notify Helper (Optional but good)
+            await addDoc(collection(db, 'notifications'), {
+                recipientId: ratingModal.helperId,
+                type: 'rating_received',
+                title: 'You received a rating! ⭐',
+                message: `You received a ${ratingModal.rating}-star rating for your help!`,
+                requestId: ratingModal.requestId,
+                read: false,
+                createdAt: serverTimestamp()
+            })
+
+            // 4. Close (Delete) the Chat Conversation
+            const qChat = query(
+                collection(db, 'chats'),
+                where('requestId', '==', ratingModal.requestId)
+            )
+            const chatSnap = await getDocs(qChat)
+            chatSnap.forEach(async (docSnap) => {
+                await deleteDoc(doc(db, 'chats', docSnap.id))
+            })
+
+            setRatingModal({ ...ratingModal, isOpen: false })
+
+        } catch (err) {
+            console.error("Error submitting rating:", err)
+        } finally {
+            setIsProcessing(false)
+        }
+    }
+
     const formatDate = (date) => {
         return new Intl.DateTimeFormat('en-US', {
             month: 'short',
@@ -361,40 +430,67 @@ export default function MyRequests() {
                                                         <p className="text-dark mb-1 italic">"{offer.message}"</p>
 
                                                         {offer.status === 'accepted' ? (
-                                                            <div className="flex items-center gap-2 mt-2">
+                                                            <div className="flex flex-col gap-2 mt-2">
                                                                 <div className="flex items-center gap-2 text-green-600 font-semibold text-xs flex-grow">
                                                                     <Check size={14} /> Accepted • {offer.helperEmail}
                                                                 </div>
-                                                                <button
-                                                                    onClick={() => {
-                                                                        // Quick find chat logic could be better, but for now navigate to specific chat if we can find it, 
-                                                                        // or just /chat to let list load. 
-                                                                        // Ideal: We should probably fetch chat ID or navigate to /chat and let user find it.
-                                                                        // Or, assume we can query it quickly.
-                                                                        // Let's just go to /chat for now? No, user expects specific chat.
-                                                                        // Let's do a quick lookup on click or better yet, link to it if we had it.
-                                                                        // Since we don't have chatId in the 'offers' collection, we have to query.
-                                                                        // We can do an async lookup here.
-                                                                        const findChat = async () => {
-                                                                            const q = query(
-                                                                                collection(db, 'chats'),
-                                                                                where('requestId', '==', request.id),
-                                                                                where('participants', 'array-contains', offer.helperId)
-                                                                            )
-                                                                            const snap = await getDocs(q)
-                                                                            if (!snap.empty) {
-                                                                                navigate(`/chat/${snap.docs[0].id}`)
-                                                                            } else {
-                                                                                // Fallback
-                                                                                navigate('/chat')
+                                                                <div className="flex gap-2">
+                                                                    <button
+                                                                        onClick={() => {
+                                                                            // Quick find chat logic could be better, but for now navigate to specific chat if we can find it, 
+                                                                            // or just /chat to let list load. 
+                                                                            // Ideal: We should probably fetch chat ID or navigate to /chat and let user find it.
+                                                                            // Or, assume we can query it quickly.
+                                                                            // Let's just go to /chat for now? No, user expects specific chat.
+                                                                            // Let's do a quick lookup on click or better yet, link to it if we had it.
+                                                                            // Since we don't have chatId in the 'offers' collection, we have to query.
+                                                                            // We can do an async lookup here.
+                                                                            const findChat = async () => {
+                                                                                try {
+                                                                                    const q = query(
+                                                                                        collection(db, 'chats'),
+                                                                                        where('requestId', '==', request.id),
+                                                                                        // Just query by participants containing helper, we'll filter client side for safety or check doc
+                                                                                        where('participants', 'array-contains', offer.helperId)
+                                                                                    )
+                                                                                    const snap = await getDocs(q)
+                                                                                    if (!snap.empty) {
+                                                                                        const chatDoc = snap.docs[0]
+                                                                                        const chatData = chatDoc.data()
+
+                                                                                        // Check if I am in participants
+                                                                                        if (!chatData.participants.includes(auth.currentUser.uid)) {
+                                                                                            // I deleted it, so add me back (revive)
+                                                                                            await updateDoc(doc(db, 'chats', chatDoc.id), {
+                                                                                                participants: [...chatData.participants, auth.currentUser.uid]
+                                                                                            })
+                                                                                        }
+                                                                                        navigate(`/chat/${chatDoc.id}`)
+                                                                                    } else {
+                                                                                        // Should create if not exists, but 'accept' logic usually creates it.
+                                                                                        navigate('/chat')
+                                                                                    }
+                                                                                } catch (err) {
+                                                                                    console.error("Error finding chat:", err)
+                                                                                    navigate('/chat')
+                                                                                }
                                                                             }
-                                                                        }
-                                                                        findChat()
-                                                                    }}
-                                                                    className="flex items-center gap-1 bg-accent/10 text-accent px-3 py-1.5 rounded-md text-xs font-semibold hover:bg-accent/20 transition-colors"
-                                                                >
-                                                                    <MessageSquare size={14} /> Chat
-                                                                </button>
+                                                                            findChat()
+                                                                        }}
+                                                                        className="flex items-center gap-1 bg-accent/10 text-accent px-3 py-1.5 rounded-md text-xs font-semibold hover:bg-accent/20 transition-colors"
+                                                                    >
+                                                                        <MessageSquare size={14} /> Chat
+                                                                    </button>
+
+                                                                    {request.status !== 'completed' && (
+                                                                        <button
+                                                                            onClick={() => handleComplete(request, offer.helperId)}
+                                                                            className="flex-1 flex items-center justify-center gap-1 bg-green-100 text-green-700 py-1.5 rounded-md text-xs font-semibold hover:bg-green-200 transition-colors"
+                                                                        >
+                                                                            <Check size={14} /> Mark Done
+                                                                        </button>
+                                                                    )}
+                                                                </div>
                                                             </div>
                                                         ) : (
                                                             <div className="flex items-center gap-2 mt-2">
@@ -453,7 +549,8 @@ export default function MyRequests() {
                             )
                         })}
                     </div>
-                )}
+                )
+                }
             </Section>
             {/* Confirmation Modal */}
             {confirmation.isOpen && (
@@ -496,6 +593,60 @@ export default function MyRequests() {
                                         <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
                                     ) : (
                                         confirmation.title.split(' ')[0] // "Delete", "Accept", "Decline"
+                                    )}
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Rating Modal */}
+            {ratingModal.isOpen && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-fade-in">
+                    <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm overflow-hidden animate-slide-up">
+                        <div className="p-6 text-center">
+                            <div className="w-16 h-16 bg-yellow-100 rounded-full flex items-center justify-center mx-auto mb-4 text-yellow-500">
+                                <Star size={32} fill="currentColor" />
+                            </div>
+
+                            <h3 className="text-xl font-bold text-dark mb-2">Rate your Helper</h3>
+                            <p className="text-gray text-sm mb-6">
+                                How was your experience? Your feedback helps the community grow.
+                            </p>
+
+                            <div className="flex justify-center gap-2 mb-8">
+                                {[1, 2, 3, 4, 5].map((star) => (
+                                    <button
+                                        key={star}
+                                        onClick={() => setRatingModal({ ...ratingModal, rating: star })}
+                                        className="transition-transform hover:scale-110 focus:outline-none"
+                                    >
+                                        <Star
+                                            size={32}
+                                            className={`${ratingModal.rating >= star ? 'text-yellow-400 fill-yellow-400' : 'text-gray-300'}`}
+                                        />
+                                    </button>
+                                ))}
+                            </div>
+
+                            <div className="flex gap-3">
+                                <button
+                                    onClick={() => setRatingModal({ ...ratingModal, isOpen: false })}
+                                    className="flex-1 py-2.5 rounded-xl border border-gray/20 text-dark font-semibold hover:bg-gray-50 transition-colors"
+                                    disabled={isProcessing}
+                                >
+                                    Later
+                                </button>
+                                <button
+                                    onClick={submitRating}
+                                    disabled={isProcessing || ratingModal.rating === 0}
+                                    className="flex-1 py-2.5 rounded-xl bg-accent text-white font-semibold hover:bg-accent/90 transition-colors shadow-lg shadow-accent/20 flex items-center justify-center disabled:opacity-50 disabled:cursor-not-allowed"
+                                >
+                                    {isProcessing ? (
+                                        <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                                    ) : (
+                                        'Submit Rating'
                                     )}
                                 </button>
                             </div>
