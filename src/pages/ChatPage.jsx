@@ -190,7 +190,7 @@ export default function ChatPage() {
     }
 
     return (
-        <div className="bg-gray-50 pb-0 flex flex-col h-[calc(100vh-5rem)]">
+        <div className="bg-gray-50 flex flex-col h-screen pt-20">
             <div className="flex-grow flex overflow-hidden">
                 {/* Sidebar (Chat List) */}
                 <div className={`${activeChat ? 'hidden md:flex' : 'flex'} w-full md:w-80 lg:w-96 flex-col bg-white border-r border-gray/10`}>

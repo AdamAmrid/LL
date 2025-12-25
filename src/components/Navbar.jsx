@@ -362,14 +362,29 @@ export default function Navbar({ user }) {
             </nav>
 
 
-            {/* Mobile Menu Button */}
-            <button
-              aria-label="Toggle menu"
-              className="lg:hidden p-2 text-dark hover:text-accent transition-colors"
-              onClick={() => setOpen(!open)}
-            >
-              {open ? <X size={24} /> : <Menu size={24} />}
-            </button>
+            {/* Mobile Actions (Messages) */}
+            <div className="lg:hidden flex items-center gap-2">
+              {user && !isAdmin && (
+                <Link
+                  to="/chat"
+                  className="p-2 text-dark hover:text-accent transition-colors relative"
+                >
+                  <MessageSquare size={24} />
+                  {chatUnreadCount > 0 && (
+                    <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-red-500 rounded-full border border-white" />
+                  )}
+                </Link>
+              )}
+
+              {/* Mobile Menu Button */}
+              <button
+                aria-label="Toggle menu"
+                className="p-2 text-dark hover:text-accent transition-colors"
+                onClick={() => setOpen(!open)}
+              >
+                {open ? <X size={24} /> : <Menu size={24} />}
+              </button>
+            </div>
           </div>
         </div>
 
