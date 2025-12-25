@@ -22,7 +22,7 @@ export default function About() {
       <Section id="values" title="Our Core Values" className="pt-8">
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
           {values.map(({ icon: Icon, title, desc }) => (
-            <div key={title} className="reveal bg-white rounded-xl p-6 shadow-um6p border border-gray/10 hover:border-accent/40 hover:shadow-lg hover:-translate-y-2 transition-all duration-300 ease-soft cursor-default">
+            <div key={title} className="bg-white rounded-xl p-6 shadow-um6p border border-gray/10 hover:border-accent/40 hover:shadow-lg hover:-translate-y-2 transition-all duration-300 ease-soft cursor-default">
               <Icon className="text-accent transition-transform duration-300 group-hover:scale-110" size={28} />
               <h3 className="mt-3 font-semibold text-lg text-dark">{title}</h3>
               <p className="text-gray mt-1 text-sm">{desc}</p>
@@ -35,7 +35,7 @@ export default function About() {
       <Section id="how" title="How USN Works" className="py-8">
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6 items-start">
           {steps.map(({ icon: Icon, title, desc }, idx) => (
-            <div key={title} className="reveal bg-white rounded-xl p-6 shadow-um6p border border-gray/10 relative hover:shadow-lg hover:-translate-y-1 transition-all duration-300 ease-soft">
+            <div key={title} className="bg-white rounded-xl p-6 shadow-um6p border border-gray/10 relative hover:shadow-lg hover:-translate-y-1 transition-all duration-300 ease-soft">
               <div className="flex items-center gap-3">
                 <div className="h-10 w-10 rounded-lg bg-accent/10 flex items-center justify-center group-hover:bg-accent/20 transition-colors duration-300"><Icon className="text-accent group-hover:scale-110 transition-transform duration-300" size={20} /></div>
                 <h4 className="font-semibold text-dark">{title}</h4>
@@ -51,7 +51,7 @@ export default function About() {
 
       {/* About This Project */}
       <Section id="context" title="About This Project" className="py-8">
-        <div className="reveal bg-gradient-to-r from-accent/5 via-orange/5 to-accent/5 rounded-2xl p-8 sm:p-10 shadow-um6p border border-accent/10">
+        <div className="bg-gradient-to-r from-accent/5 via-orange/5 to-accent/5 rounded-2xl p-8 sm:p-10 shadow-um6p border border-accent/10">
           <div className="flex items-start gap-4 mb-6">
             <div className="h-12 w-12 rounded-xl bg-accent/10 flex items-center justify-center flex-shrink-0">
               <Target className="text-accent" size={24} />
@@ -85,7 +85,7 @@ export default function About() {
 
       {/* CTA */}
       <Section id="cta" className="py-8">
-        <div className="reveal bg-dark/5 rounded-2xl p-8 sm:p-10 text-center shadow-um6p border border-gray/10">
+        <div className="bg-dark/5 rounded-2xl p-8 sm:p-10 text-center shadow-um6p border border-gray/10">
           <h3 className="font-mont text-2xl sm:text-3xl font-extrabold text-dark">Ready to Join?</h3>
           <p className="text-gray mt-2">Join 100+ students building solidarity at UM6P</p>
           <div className="mt-6 flex flex-wrap gap-4 justify-center">

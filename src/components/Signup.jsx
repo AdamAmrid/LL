@@ -3,7 +3,7 @@ import { Link, useNavigate } from 'react-router-dom'
 import { createUserWithEmailAndPassword, sendEmailVerification, updateProfile, signOut } from 'firebase/auth'
 import { doc, setDoc } from 'firebase/firestore'
 import { auth, db, getCallbackUrl } from '../firebase'
-import { User, Mail, Lock, ChevronDown, AlertCircle, CheckCircle, CreditCard, Building2, GraduationCap, Briefcase } from 'lucide-react'
+import { User, Mail, Lock, ChevronDown, AlertCircle, CheckCircle, Building2, GraduationCap, Briefcase } from 'lucide-react'
 
 const departments = [
   'SCI',
@@ -30,7 +30,6 @@ export default function Signup() {
     gender: '',
     role: '',
     campus: '',
-    napsCardNumber: '',
     department: '',
     educationalLevel: ''
   })
@@ -105,19 +104,7 @@ export default function Signup() {
         return
       }
 
-      if (!formData.napsCardNumber.trim()) {
-        setError('Please enter your Naps Card Number')
-        setLoading(false)
-        return
-      }
 
-      // Validate Naps Card Number: exactly 16 digits
-      const napsCardRegex = /^\d{16}$/
-      if (!napsCardRegex.test(formData.napsCardNumber.replace(/\s/g, ''))) {
-        setError('Naps Card Number must be exactly 16 digits')
-        setLoading(false)
-        return
-      }
 
       // If role is Student, validate department and educational level
       if (formData.role === 'Student') {
@@ -159,7 +146,6 @@ export default function Signup() {
         gender: formData.gender,
         role: formData.role,
         campus: formData.campus,
-        napsCardNumber: formData.napsCardNumber.replace(/\s/g, ''), // Remove spaces
         createdAt: new Date().toISOString()
       }
 
@@ -433,36 +419,7 @@ export default function Signup() {
               </div>
             </div>
 
-            {/* Naps Card Number */}
-            <div>
-              <label htmlFor="napsCardNumber" className="block text-sm font-medium text-dark mb-2">
-                Naps Card Number
-              </label>
-              <div className="relative">
-                <CreditCard className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={18} />
-                <input
-                  type="text"
-                  id="napsCardNumber"
-                  name="napsCardNumber"
-                  value={formData.napsCardNumber}
-                  onChange={(e) => {
-                    // Only allow digits and spaces, max 19 characters (16 digits + 3 spaces for formatting)
-                    const value = e.target.value.replace(/\D/g, '').slice(0, 16)
-                    setFormData(prev => ({
-                      ...prev,
-                      napsCardNumber: value
-                    }))
-                    setError(null)
-                  }}
-                  className="w-full pl-10 pr-4 py-3 border border-gray/20 rounded-xl focus:outline-none focus:ring-2 focus:ring-accent focus:border-transparent transition-all font-mono tracking-wider"
-                  placeholder="1234567890123456"
-                  maxLength={16}
-                  required
-                  disabled={loading || success}
-                />
-              </div>
-              <p className="mt-1 text-xs text-gray">Enter your 16-digit Naps Card Number</p>
-            </div>
+
 
             {/* Department - Only show if Role is Student */}
             {isStudent && (

@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react'
 import { Link, useNavigate, useLocation } from 'react-router-dom'
 import { signInWithEmailAndPassword, signOut, sendEmailVerification, reload } from 'firebase/auth'
-import { auth, getCallbackUrl } from '../firebase'
+import { doc, getDoc } from 'firebase/firestore'
+import { auth, db, getCallbackUrl } from '../firebase'
 import { Mail, Lock, LogIn, AlertCircle, RefreshCw, CheckCircle } from 'lucide-react'
 
 export default function Login() {
@@ -72,9 +73,47 @@ export default function Login() {
         return
       }
 
-      // Success: If verified, navigate to home
+      // Success: If verified, check for admin (via Role OR Email) and navigate
       setLoading(false)
-      navigate('/', { replace: true })
+
+      const ADMIN_EMAIL = 'shephardjack977@gmail.com'
+      let isAdmin = false
+
+      try {
+        // Fetch user document to check role
+        const userDocRef = doc(db, 'users', user.uid)
+        const userDocSnap = await getDoc(userDocRef)
+
+        if (userDocSnap.exists()) {
+          const userData = userDocSnap.data()
+
+          // Check if suspended
+          if (userData.status === 'suspended') {
+            await signOut(auth)
+            setLoading(false)
+            setError('Your account has been deactivated. Please contact support.')
+            return
+          }
+
+          if (userData.role === 'admin') {
+            isAdmin = true
+          }
+        }
+      } catch (roleErr) {
+        console.error("Error fetching user role:", roleErr)
+        // Continue with email check as fallback
+      }
+
+      // Check email as backup
+      if (user.email?.toLowerCase().trim() === ADMIN_EMAIL.toLowerCase().trim()) {
+        isAdmin = true
+      }
+
+      if (isAdmin) {
+        navigate('/admin', { replace: true })
+      } else {
+        navigate('/', { replace: true })
+      }
 
     } catch (err) {
       console.error('Login error:', err)

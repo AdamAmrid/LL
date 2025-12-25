@@ -6,7 +6,7 @@ export default function Team() {
     <div className="space-y-16 sm:space-y-20">
       {/* Hero Section */}
       <Section id="team-hero" className="pt-8">
-        <div className="reveal text-center max-w-4xl mx-auto">
+        <div className="text-center max-w-4xl mx-auto">
           <h1 className="font-mont font-extrabold text-4xl sm:text-5xl lg:text-6xl text-dark mb-4">
             Our Team
           </h1>
@@ -20,7 +20,7 @@ export default function Team() {
       <Section id="team" className="py-8">
         <div className="space-y-12">
           {/* Nexus Leader */}
-          <div className="reveal">
+          <div>
             <div className="bg-gradient-to-r from-accent/10 via-accent/5 to-orange/10 rounded-2xl p-8 shadow-um6p border-2 border-accent/20">
               <h3 className="text-center font-bold text-2xl text-dark mb-8">Nexus Leader</h3>
               <div className="flex flex-col items-center">
@@ -48,7 +48,7 @@ export default function Team() {
           {/* Two Boards */}
           <div className="grid md:grid-cols-2 gap-8">
             {/* LMB Team */}
-            <div className="reveal">
+            <div>
               <div className="bg-secondary rounded-2xl p-8 shadow-um6p border border-gray/10">
                 <div className="flex items-center gap-3 mb-6">
                   <div className="h-12 w-12 rounded-xl bg-white flex items-center justify-center shadow-sm">
@@ -80,7 +80,7 @@ export default function Team() {
                     <h4 className="font-semibold text-dark">Adam Amrid</h4>
                     <p className="text-sm text-gray">LMB Member</p>
                   </div>
-                  
+
                   {/* Imane Badari */}
                   <div className="flex flex-col items-center text-center">
                     <div className="relative mb-3">
@@ -106,7 +106,7 @@ export default function Team() {
             </div>
 
             {/* CUB Team */}
-            <div className="reveal">
+            <div>
               <div className="bg-gradient-to-br from-orange/10 to-accent/10 rounded-2xl p-8 shadow-um6p border border-orange/20">
                 <div className="flex items-center gap-3 mb-6">
                   <div className="h-12 w-12 rounded-xl bg-white flex items-center justify-center shadow-sm">
@@ -138,7 +138,7 @@ export default function Team() {
                     <h4 className="font-semibold text-dark">Taha Zaamoun</h4>
                     <p className="text-sm text-gray">CUB Member</p>
                   </div>
-                  
+
                   {/* Hafsa */}
                   <div className="flex flex-col items-center text-center">
                     <div className="relative mb-3">

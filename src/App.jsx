@@ -5,6 +5,7 @@ import { auth } from './firebase'
 import Navbar from './components/Navbar'
 import Footer from './components/Footer'
 import ScrollToTop from './components/ScrollToTop'
+import AdminDashboard from './pages/AdminDashboard'
 
 function RouteProgress({ isNavigating }) {
   return isNavigating ? <div className="route-progress animate-[pulse_1.2s_ease-in-out_infinite]" /> : null
@@ -51,23 +52,7 @@ export default function App() {
     return () => clearTimeout(t)
   }, [location])
 
-  // IntersectionObserver to reveal elements on scroll
-  useEffect(() => {
-    const observer = new IntersectionObserver(
-      (entries) => {
-        entries.forEach((entry) => {
-          if (entry.isIntersecting) {
-            entry.target.classList.add('revealed')
-            observer.unobserve(entry.target)
-          }
-        })
-      },
-      { threshold: 0.12 }
-    )
 
-    document.querySelectorAll('.reveal').forEach((el) => observer.observe(el))
-    return () => observer.disconnect()
-  })
 
   // Show loading state while checking auth
   if (loading) {

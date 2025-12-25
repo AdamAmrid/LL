@@ -82,20 +82,18 @@ export default function HowItWorks() {
           {phases.map((phase, idx) => {
             const Icon = phase.icon
             return (
-              <div key={idx} className="reveal relative">
+              <div key={idx} className="relative">
                 {/* Connector Line */}
                 {idx < phases.length - 1 && (
                   <div className="hidden md:block absolute top-12 left-full w-full h-0.5 bg-gradient-to-r from-accent/30 via-orange/30 to-accent/30 z-0" style={{ width: 'calc(100% - 2rem)', transform: 'translateX(1rem)' }} aria-hidden="true" />
                 )}
-                
-                <div className={`bg-white rounded-2xl p-8 shadow-um6p border-2 transition-all duration-300 h-full relative z-10 ${
-                  phase.color === 'accent' 
-                    ? 'border-accent/20 hover:border-accent/40' 
+
+                <div className={`bg-white rounded-2xl p-8 shadow-um6p border-2 transition-all duration-300 h-full relative z-10 ${phase.color === 'accent'
+                    ? 'border-accent/20 hover:border-accent/40'
                     : 'border-orange/20 hover:border-orange/40'
-                } hover:shadow-lg hover:-translate-y-2`}>
-                  <div className={`inline-flex items-center gap-2 px-4 py-2 rounded-xl mb-4 ${
-                    phase.color === 'accent' ? 'bg-accent/10' : 'bg-orange/10'
-                  }`}>
+                  } hover:shadow-lg hover:-translate-y-2`}>
+                  <div className={`inline-flex items-center gap-2 px-4 py-2 rounded-xl mb-4 ${phase.color === 'accent' ? 'bg-accent/10' : 'bg-orange/10'
+                    }`}>
                     <Icon className={phase.color === 'accent' ? 'text-accent' : 'text-orange'} size={20} />
                     <span className="text-xs font-bold text-gray uppercase tracking-wider">{phase.phase}</span>
                   </div>
@@ -125,10 +123,9 @@ export default function HowItWorks() {
           {activities.map((activity, idx) => {
             const Icon = activity.icon
             return (
-              <div key={idx} className="reveal bg-gradient-to-br from-white to-secondary rounded-2xl p-8 shadow-um6p border border-gray/10 hover:shadow-lg hover:-translate-y-2 transition-all duration-300">
-                <div className={`h-14 w-14 rounded-xl flex items-center justify-center mb-4 ${
-                  activity.color === 'accent' ? 'bg-accent/10' : 'bg-orange/10'
-                }`}>
+              <div key={idx} className="bg-gradient-to-br from-white to-secondary rounded-2xl p-8 shadow-um6p border border-gray/10 hover:shadow-lg hover:-translate-y-2 transition-all duration-300">
+                <div className={`h-14 w-14 rounded-xl flex items-center justify-center mb-4 ${activity.color === 'accent' ? 'bg-accent/10' : 'bg-orange/10'
+                  }`}>
                   <Icon className={activity.color === 'accent' ? 'text-accent' : 'text-orange'} size={28} />
                 </div>
                 <h4 className="font-bold text-xl text-dark mb-3">{activity.title}</h4>

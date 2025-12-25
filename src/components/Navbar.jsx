@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from 'react'
 import { Link, NavLink, useNavigate } from 'react-router-dom'
 import { signOut } from 'firebase/auth'
-import { collection, query, where, onSnapshot, orderBy, limit, updateDoc, doc, getDocs } from 'firebase/firestore'
+import { collection, query, where, onSnapshot, orderBy, limit, updateDoc, doc, getDocs, getDoc } from 'firebase/firestore'
 import { db, auth } from '../firebase'
 import { Menu, X, LogOut, User, BookOpen, Bell, MessageSquare } from 'lucide-react'
 import UM6PLogo from './UM6PLogo'
@@ -17,6 +17,7 @@ const navItems = [
 export default function Navbar({ user }) {
   const [open, setOpen] = useState(false)
   const [isDropdownOpen, setIsDropdownOpen] = useState(false)
+  const [isAdmin, setIsAdmin] = useState(false)
   const [notifications, setNotifications] = useState([])
   const [showNotifications, setShowNotifications] = useState(false)
   const [unreadCount, setUnreadCount] = useState(0)
@@ -74,6 +75,38 @@ export default function Navbar({ user }) {
     })
 
     return () => unsubscribe()
+  }, [user])
+
+  // Check admin role
+  useEffect(() => {
+    const checkAdmin = async () => {
+      if (!user) {
+        setIsAdmin(false)
+        return
+      }
+
+      // 1. Email Check
+      if (user.email?.toLowerCase().trim() === 'shephardjack977@gmail.com') {
+        setIsAdmin(true)
+        return
+      }
+
+      // 2. Firestore Role Check
+      try {
+        const userDocRef = doc(db, 'users', user.uid)
+        const userDocSnap = await getDoc(userDocRef)
+        if (userDocSnap.exists() && userDocSnap.data().role === 'admin') {
+          setIsAdmin(true)
+        } else {
+          setIsAdmin(false)
+        }
+      } catch (err) {
+        console.error("Error checking admin role:", err)
+        setIsAdmin(false)
+      }
+    }
+
+    checkAdmin()
   }, [user])
 
   // Listen for Unread Messages in Chats
@@ -139,7 +172,7 @@ export default function Navbar({ user }) {
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between h-20">
             {/* Logo */}
-            <Link to="/" className="flex items-center gap-3 group">
+            <Link to={isAdmin ? "/admin" : "/"} className="flex items-center gap-3 group">
               <UM6PLogo className="h-10 sm:h-12" />
               <div className="hidden sm:block">
                 <SCILogo iconSize="h-8 sm:h-10" showText={false} className="opacity-80" />
@@ -152,7 +185,8 @@ export default function Navbar({ user }) {
 
             {/* Desktop Navigation */}
             <nav className="hidden lg:flex items-center gap-1" aria-label="Main Navigation">
-              {navItems.map((item, index) => (
+              {/* Only show regular nav items if NOT admin */}
+              {!isAdmin && navItems.map((item, index) => (
                 <div key={item.to} className="flex items-center">
                   <NavLink
                     to={item.to}
@@ -171,73 +205,92 @@ export default function Navbar({ user }) {
                 </div>
               ))}
 
+              {/* If Admin, show only Admin related links if necessary, or nothing (dashboard is main view) */}
+              {isAdmin && (
+                <NavLink
+                  to="/admin"
+                  className={({ isActive }) =>
+                    `px-4 py-2 text-sm font-medium transition-all duration-200 rounded-lg ${isActive
+                      ? 'text-accent font-semibold bg-accent/5'
+                      : 'text-dark hover:text-accent hover:bg-secondary'
+                    }`
+                  }
+                >
+                  Admin Dashboard
+                </NavLink>
+              )}
+
               {/* Auth Actions - Desktop */}
               <div className="ml-4 pl-4 border-l border-gray/20 flex items-center gap-4">
                 {user && user.emailVerified ? (
                   <>
-                    {/* Messages Link */}
-                    <Link
-                      to="/chat"
-                      className="p-2 text-gray hover:text-accent transition-colors rounded-full hover:bg-gray-100 relative"
-                    >
-                      <MessageSquare size={20} />
-                      {chatUnreadCount > 0 && (
-                        <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-red-500 rounded-full border border-white" />
-                      )}
-                    </Link>
+                    {!isAdmin && (
+                      <>
+                        {/* Messages Link */}
+                        <Link
+                          to="/chat"
+                          className="p-2 text-gray hover:text-accent transition-colors rounded-full hover:bg-gray-100 relative"
+                        >
+                          <MessageSquare size={20} />
+                          {chatUnreadCount > 0 && (
+                            <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-red-500 rounded-full border border-white" />
+                          )}
+                        </Link>
 
-                    {/* Notifications */}
-                    <div className="relative" ref={notificationRef}>
-                      <button
-                        onClick={() => setShowNotifications(!showNotifications)}
-                        className="relative p-2 text-gray hover:text-accent transition-colors rounded-full hover:bg-gray-100"
-                      >
-                        <Bell size={20} />
-                        {unreadCount > 0 && (
-                          <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-red-500 rounded-full border border-white" />
-                        )}
-                      </button>
-
-                      {showNotifications && (
-                        <div className="absolute right-0 mt-2 w-80 bg-white rounded-xl shadow-xl border border-gray/10 py-2 animate-fade-in origin-top-right overflow-hidden z-50">
-                          <div className="px-4 py-2 border-b border-gray/10 flex justify-between items-center bg-gray-50/50">
-                            <h3 className="font-bold text-sm text-dark">Notifications</h3>
-                            {unreadCount > 0 && <span className="text-xs text-accent font-medium">{unreadCount} new</span>}
-                          </div>
-                          <div className="max-h-80 overflow-y-auto">
-                            {notifications.length > 0 ? (
-                              notifications.map(notif => (
-                                <div
-                                  key={notif.id}
-                                  onClick={() => handleNotificationClick(notif)}
-                                  className={`px-4 py-3 hover:bg-gray-50 transition-colors cursor-pointer border-b border-gray/5 last:border-0 ${!notif.read ? 'bg-blue-50/30' : ''}`}
-                                >
-                                  <div className="flex gap-3">
-                                    <div className={`mt-1 w-2 h-2 rounded-full flex-shrink-0 ${!notif.read ? 'bg-accent' : 'bg-gray-200'}`} />
-                                    <div>
-                                      <p className={`text-sm ${!notif.read ? 'font-semibold text-dark' : 'text-gray-700'}`}>
-                                        {notif.title}
-                                      </p>
-                                      <p className="text-xs text-gray mt-0.5 line-clamp-2">
-                                        {notif.message}
-                                      </p>
-                                      <p className="text-[10px] text-gray/60 mt-1.5">
-                                        {notif.createdAt?.toLocaleDateString()}
-                                      </p>
-                                    </div>
-                                  </div>
-                                </div>
-                              ))
-                            ) : (
-                              <div className="p-8 text-center text-gray">
-                                <Bell size={24} className="mx-auto mb-2 opacity-20" />
-                                <p className="text-xs">No notifications yet</p>
-                              </div>
+                        {/* Notifications */}
+                        <div className="relative" ref={notificationRef}>
+                          <button
+                            onClick={() => setShowNotifications(!showNotifications)}
+                            className="relative p-2 text-gray hover:text-accent transition-colors rounded-full hover:bg-gray-100"
+                          >
+                            <Bell size={20} />
+                            {unreadCount > 0 && (
+                              <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-red-500 rounded-full border border-white" />
                             )}
-                          </div>
+                          </button>
+
+                          {showNotifications && (
+                            <div className="absolute right-0 mt-2 w-80 bg-white rounded-xl shadow-xl border border-gray/10 py-2 animate-fade-in origin-top-right overflow-hidden z-50">
+                              <div className="px-4 py-2 border-b border-gray/10 flex justify-between items-center bg-gray-50/50">
+                                <h3 className="font-bold text-sm text-dark">Notifications</h3>
+                                {unreadCount > 0 && <span className="text-xs text-accent font-medium">{unreadCount} new</span>}
+                              </div>
+                              <div className="max-h-80 overflow-y-auto">
+                                {notifications.length > 0 ? (
+                                  notifications.map(notif => (
+                                    <div
+                                      key={notif.id}
+                                      onClick={() => handleNotificationClick(notif)}
+                                      className={`px-4 py-3 hover:bg-gray-50 transition-colors cursor-pointer border-b border-gray/5 last:border-0 ${!notif.read ? 'bg-blue-50/30' : ''}`}
+                                    >
+                                      <div className="flex gap-3">
+                                        <div className={`mt-1 w-2 h-2 rounded-full flex-shrink-0 ${!notif.read ? 'bg-accent' : 'bg-gray-200'}`} />
+                                        <div>
+                                          <p className={`text-sm ${!notif.read ? 'font-semibold text-dark' : 'text-gray-700'}`}>
+                                            {notif.title}
+                                          </p>
+                                          <p className="text-xs text-gray mt-0.5 line-clamp-2">
+                                            {notif.message}
+                                          </p>
+                                          <p className="text-[10px] text-gray/60 mt-1.5">
+                                            {notif.createdAt?.toLocaleDateString()}
+                                          </p>
+                                        </div>
+                                      </div>
+                                    </div>
+                                  ))
+                                ) : (
+                                  <div className="p-8 text-center text-gray">
+                                    <Bell size={24} className="mx-auto mb-2 opacity-20" />
+                                    <p className="text-xs">No notifications yet</p>
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          )}
                         </div>
-                      )}
-                    </div>
+                      </>
+                    )}
 
                     {/* Profile Dropdown */}
                     <div className="relative" ref={dropdownRef}>
@@ -255,17 +308,32 @@ export default function Navbar({ user }) {
                           <div className="px-4 py-3 border-b border-gray/10">
                             <p className="text-xs text-gray">Signed in as</p>
                             <p className="text-sm font-semibold text-dark truncate">{user.email}</p>
+                            {isAdmin && <span className="inline-block mt-1 px-2 py-0.5 bg-accent/10 text-accent text-xs font-bold rounded">ADMIN</span>}
                           </div>
 
                           <div className="py-1">
-                            <Link
-                              to="/my-requests"
-                              onClick={() => setIsDropdownOpen(false)}
-                              className="flex items-center gap-2 px-4 py-2 text-sm text-dark hover:bg-gray-50 hover:text-accent transition-colors"
-                            >
-                              <BookOpen size={16} />
-                              My Requests
-                            </Link>
+                            {!isAdmin ? (
+                              <Link
+                                to="/my-requests"
+                                onClick={() => setIsDropdownOpen(false)}
+                                className="flex items-center gap-2 px-4 py-2 text-sm text-dark hover:bg-gray-50 hover:text-accent transition-colors"
+                              >
+                                <BookOpen size={16} />
+                                My Requests
+                              </Link>
+                            ) : (
+                              <Link
+                                to="/admin"
+                                onClick={() => setIsDropdownOpen(false)}
+                                className="flex items-center gap-2 px-4 py-2 text-sm text-dark hover:bg-gray-50 hover:text-accent transition-colors"
+                              >
+                                <div className="w-4 h-4 flex items-center justify-center">
+                                  {/* Shield icon placeholder or simple svg */}
+                                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" /></svg>
+                                </div>
+                                Admin Dashboard
+                              </Link>
+                            )}
                           </div>
 
                           <div className="border-t border-gray/10 pt-1 mt-1">
@@ -332,16 +400,30 @@ export default function Navbar({ user }) {
                     <div className="flex items-center gap-2 text-sm text-gray mb-3">
                       <User size={16} />
                       <span>{user.email || user.displayName || 'User'}</span>
+                      {isAdmin && <span className="text-accent text-xs font-bold bg-accent/10 px-1 rounded">ADMIN</span>}
                     </div>
 
-                    <Link
-                      to="/my-requests"
-                      onClick={() => setOpen(false)}
-                      className="w-full inline-flex items-center gap-2 px-4 py-3 text-base font-medium text-dark hover:text-accent hover:bg-secondary rounded-lg transition-all duration-200 mb-2"
-                    >
-                      <BookOpen size={18} />
-                      My Requests
-                    </Link>
+                    {!isAdmin ? (
+                      <Link
+                        to="/my-requests"
+                        onClick={() => setOpen(false)}
+                        className="w-full inline-flex items-center gap-2 px-4 py-3 text-base font-medium text-dark hover:text-accent hover:bg-secondary rounded-lg transition-all duration-200 mb-2"
+                      >
+                        <BookOpen size={18} />
+                        My Requests
+                      </Link>
+                    ) : (
+                      <Link
+                        to="/admin"
+                        onClick={() => setOpen(false)}
+                        className="w-full inline-flex items-center gap-2 px-4 py-3 text-base font-medium text-dark hover:text-accent hover:bg-secondary rounded-lg transition-all duration-200 mb-2"
+                      >
+                        <div className="w-4 h-4 flex items-center justify-center">
+                          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" /></svg>
+                        </div>
+                        Admin Dashboard
+                      </Link>
+                    )}
 
                     <button
                       onClick={() => {

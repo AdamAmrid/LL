@@ -18,6 +18,7 @@ import VerifyEmailCallback from './pages/VerifyEmailCallback'
 import ActivateAccount from './pages/ActivateAccount'
 import NotFound from './pages/NotFound'
 import ChatPage from './pages/ChatPage'
+import AdminDashboard from './pages/AdminDashboard'
 
 const router = createBrowserRouter([
   {
@@ -40,6 +41,7 @@ const router = createBrowserRouter([
       { path: 'verify-email-callback', element: <VerifyEmailCallback /> },
       { path: 'chat', element: <ChatPage /> },
       { path: 'chat/:chatId', element: <ChatPage /> },
+      { path: 'admin', element: <AdminDashboard /> },
     ],
     errorElement: <NotFound />,
   },
