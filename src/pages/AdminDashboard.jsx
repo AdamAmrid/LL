@@ -18,7 +18,8 @@ import {
     Mail,
     Calendar,
     Ban,
-    Unlock
+    Unlock,
+    AlertTriangle
 } from 'lucide-react'
 
 const ADMIN_EMAIL = 'shephardjack977@gmail.com'
@@ -38,6 +39,11 @@ export default function AdminDashboard() {
 
     // Action State
     const [actionLoading, setActionLoading] = useState(null)
+    const [confirmModal, setConfirmModal] = useState({
+        isOpen: false,
+        userId: null,
+        currentStatus: null
+    })
 
     // View State
     const [activeView, setActiveView] = useState('requests') // 'users', 'requests', 'offers', 'completed'
@@ -432,7 +438,7 @@ export default function AdminDashboard() {
                                                         <button
                                                             onClick={(e) => {
                                                                 e.stopPropagation()
-                                                                toggleUserStatus(item.id, item.status)
+                                                                initiateToggleStatus(item.id, item.status)
                                                             }}
                                                             disabled={actionLoading === item.id || item.role === 'admin'} // Prevent blocking admins
                                                             className={`p-2 rounded-lg transition-colors ${item.status === 'suspended'
@@ -550,6 +556,47 @@ export default function AdminDashboard() {
                 </div>
             </Section>
         </div>
+
+        {/* Confirmation Modal */ }
+    {
+        confirmModal.isOpen && (
+            <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-fade-in">
+                <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm overflow-hidden animate-slide-up">
+                    <div className="p-6 text-center">
+                        <div className={`w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4 bg-red-50 text-red-500`}>
+                            <Ban size={32} />
+                        </div>
+                        <h3 className="text-xl font-bold text-dark mb-2">
+                            {confirmModal.currentStatus === 'suspended' ? 'Unblock User?' : 'Suspend User?'}
+                        </h3>
+                        <p className="text-gray text-sm mb-6 leading-relaxed">
+                            {confirmModal.currentStatus === 'suspended'
+                                ? 'Are you sure you want to reactivate this user? They will regain access to the platform.'
+                                : 'Are you sure you want to suspend this user? They will lose access to the platform immediately.'}
+                        </p>
+                        <div className="flex gap-3">
+                            <button
+                                onClick={() => setConfirmModal({ isOpen: false, userId: null, currentStatus: null })}
+                                className="flex-1 py-2.5 rounded-xl border border-gray/20 text-dark font-semibold hover:bg-gray-50 transition-colors"
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                onClick={confirmToggleStatus}
+                                className={`flex-1 py-2.5 rounded-xl text-white font-semibold transition-colors shadow-lg ${confirmModal.currentStatus === 'suspended'
+                                        ? 'bg-green-600 hover:bg-green-700 shadow-green-600/20'
+                                        : 'bg-red-600 hover:bg-red-700 shadow-red-600/20'
+                                    }`}
+                            >
+                                {confirmModal.currentStatus === 'suspended' ? 'Unblock' : 'Suspend'}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        )
+    }
+    </div >
     )
 }
 
