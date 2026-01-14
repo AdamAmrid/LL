@@ -1,9 +1,9 @@
 import { useState, useRef, useEffect } from 'react'
 import { Link, NavLink, useNavigate } from 'react-router-dom'
 import { signOut } from 'firebase/auth'
-import { collection, query, where, onSnapshot, orderBy, limit, updateDoc, doc, getDocs, getDoc } from 'firebase/firestore'
+import { collection, query, where, onSnapshot, orderBy, limit, updateDoc, doc, getDocs, getDoc, addDoc, serverTimestamp } from 'firebase/firestore'
 import { db, auth } from '../firebase'
-import { Menu, X, LogOut, User, BookOpen, Bell, MessageSquare } from 'lucide-react'
+import { Menu, X, LogOut, User, BookOpen, Bell, MessageSquare, Star } from 'lucide-react'
 import UM6PLogo from './UM6PLogo'
 import SCILogo from './SCILogo'
 
@@ -23,6 +23,14 @@ export default function Navbar({ user }) {
   const [unreadCount, setUnreadCount] = useState(0)
   const [chatUnreadCount, setChatUnreadCount] = useState(0)
   const [selectedNotification, setSelectedNotification] = useState(null)
+  const [ratingModal, setRatingModal] = useState({
+    isOpen: false,
+    requestId: null,
+    targetUserId: null,
+    targetUserName: '',
+    rating: 0
+  })
+  const [isProcessing, setIsProcessing] = useState(false)
 
   const dropdownRef = useRef(null)
   const notificationRef = useRef(null)
@@ -158,6 +166,41 @@ export default function Navbar({ user }) {
       setIsDropdownOpen(false)
     } catch (error) {
       console.error('Error signing out:', error)
+    }
+  }
+
+  const handleSubmitReciprocalRating = async () => {
+    if (ratingModal.rating === 0) return
+    setIsProcessing(true)
+
+    try {
+      await addDoc(collection(db, 'ratings'), {
+        requestId: ratingModal.requestId,
+        raterId: user.uid,
+        ratedId: ratingModal.targetUserId,
+        raterRole: 'helper',
+        ratedRole: 'requester',
+        rating: ratingModal.rating,
+        createdAt: serverTimestamp(),
+        comment: ''
+      })
+
+      // Notify Requester
+      await addDoc(collection(db, 'notifications'), {
+        recipientId: ratingModal.targetUserId,
+        type: 'rating_received',
+        title: 'You received a rating! ⭐',
+        message: `Your helper rated you ${ratingModal.rating} stars!`,
+        requestId: ratingModal.requestId,
+        read: false,
+        createdAt: serverTimestamp()
+      })
+
+      setRatingModal({ ...ratingModal, isOpen: false })
+    } catch (err) {
+      console.error("Error submitting rating:", err)
+    } finally {
+      setIsProcessing(false)
     }
   }
 
@@ -519,6 +562,37 @@ export default function Navbar({ user }) {
                     <MessageSquare size={18} />
                     Start Chat
                   </button>
+                ) : selectedNotification.type === 'rating_received' ? (
+                  <button
+                    onClick={async () => {
+                      // Fetch request to get Requester ID
+                      try {
+                        const reqRef = doc(db, 'requests', selectedNotification.requestId)
+                        const reqSnap = await getDoc(reqRef)
+                        if (reqSnap.exists()) {
+                          const reqData = reqSnap.data()
+                          setRatingModal({
+                            isOpen: true,
+                            requestId: selectedNotification.requestId,
+                            targetUserId: reqData.userId, // Requester
+                            targetUserName: reqData.userName || 'Student',
+                            rating: 0
+                          })
+                          setSelectedNotification(null)
+                        } else {
+                          // Handle case where request might be deleted or not found
+                          console.error("Request not found for rating")
+                          setSelectedNotification(null)
+                        }
+                      } catch (e) {
+                        console.error("Error fetching request for rating:", e)
+                      }
+                    }}
+                    className="w-full py-2.5 rounded-xl bg-yellow-400 text-white font-semibold hover:bg-yellow-500 transition-colors shadow-lg shadow-yellow-400/20 flex items-center justify-center gap-2"
+                  >
+                    <Star size={18} fill="currentColor" />
+                    Rate Student Back
+                  </button>
                 ) : null}
 
                 <button
@@ -526,6 +600,62 @@ export default function Navbar({ user }) {
                   className="w-full py-2.5 rounded-xl bg-accent text-white font-semibold hover:bg-accent/90 transition-colors shadow-lg shadow-accent/20"
                 >
                   Got it
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Reciprocal Rating Modal */}
+      {ratingModal.isOpen && (
+        <div className="fixed inset-0 z-[110] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-fade-in">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm overflow-hidden animate-slide-up">
+            <div className="p-6 text-center">
+              <div className="w-16 h-16 bg-yellow-100 rounded-full flex items-center justify-center mx-auto mb-4 text-yellow-500">
+                <Star size={32} fill="currentColor" />
+              </div>
+
+              <h3 className="text-xl font-bold text-dark mb-2">
+                Rate {ratingModal.targetUserName}
+              </h3>
+              <p className="text-gray text-sm mb-6">
+                How was your experience helping this student?
+              </p>
+
+              <div className="flex justify-center gap-2 mb-8">
+                {[1, 2, 3, 4, 5].map((star) => (
+                  <button
+                    key={star}
+                    onClick={() => setRatingModal({ ...ratingModal, rating: star })}
+                    className="transition-transform hover:scale-110 focus:outline-none"
+                  >
+                    <Star
+                      size={32}
+                      className={`${ratingModal.rating >= star ? 'text-yellow-400 fill-yellow-400' : 'text-gray-300'}`}
+                    />
+                  </button>
+                ))}
+              </div>
+
+              <div className="flex gap-3">
+                <button
+                  onClick={() => setRatingModal({ ...ratingModal, isOpen: false })}
+                  className="flex-1 py-2.5 rounded-xl border border-gray/20 text-dark font-semibold hover:bg-gray-50 transition-colors"
+                  disabled={isProcessing}
+                >
+                  Later
+                </button>
+                <button
+                  onClick={handleSubmitReciprocalRating}
+                  disabled={isProcessing || ratingModal.rating === 0}
+                  className="flex-1 py-2.5 rounded-xl bg-accent text-white font-semibold hover:bg-accent/90 transition-colors shadow-lg shadow-accent/20 flex items-center justify-center disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {isProcessing ? (
+                    <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                  ) : (
+                    'Submit'
+                  )}
                 </button>
               </div>
             </div>

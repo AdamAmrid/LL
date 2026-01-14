@@ -56,10 +56,7 @@ export default function MyRequests() {
 
     const [isProcessing, setIsProcessing] = useState(false)
 
-    // Tab State
-    const [activeTab, setActiveTab] = useState('requests') // 'requests' | 'offers'
-    const [myOffers, setMyOffers] = useState([])
-    const [loadingOffers, setLoadingOffers] = useState(true)
+
 
     useEffect(() => {
         if (!auth.currentUser) {
@@ -117,51 +114,6 @@ export default function MyRequests() {
         return () => {
             unsubscribeRequests()
             unsubscribeOffers()
-        }
-        // 3. Listen for My Offers (Offers I made)
-        const qMyOffers = query(
-            collection(db, 'offers'),
-            where('helperId', '==', auth.currentUser.uid)
-        )
-
-        const unsubscribeMyOffers = onSnapshot(qMyOffers, async (snapshot) => {
-            const offersList = snapshot.docs.map(doc => ({
-                id: doc.id,
-                ...doc.data(),
-                createdAt: doc.data().createdAt?.toDate() || new Date()
-            }))
-
-            // Fetch associated request details for each offer
-            // Note: This is N+1 but acceptable for small scale. 
-            // Better: get all unique requestIds and fetchInBatches or use a separate listener for requests if needed.
-            // For now, let's just fetch the request doc for each offer one-off (no real-time updates on request details here unless we listen).
-            // Actually, we want to know the request STATUS (completed/assigned). So we should probably listen or refetch.
-            // Let's simplified: just simple getDocs for now, but real-time is better. 
-            // Given complexity, let's just fetch once on offer update.
-
-            const offersWithRequests = await Promise.all(offersList.map(async (offer) => {
-                try {
-                    const reqRef = doc(db, 'requests', offer.requestId)
-                    const reqSnap = await getDoc(reqRef)
-                    if (reqSnap.exists()) {
-                        return { ...offer, request: { id: reqSnap.id, ...reqSnap.data() } }
-                    }
-                    return offer
-                } catch (e) {
-                    return offer
-                }
-            }))
-
-            // Sort by createdAt desc
-            offersWithRequests.sort((a, b) => b.createdAt - a.createdAt)
-            setMyOffers(offersWithRequests)
-            setLoadingOffers(false)
-        })
-
-        return () => {
-            unsubscribeRequests()
-            unsubscribeOffers()
-            unsubscribeMyOffers()
         }
     }, [])
 
@@ -321,71 +273,49 @@ export default function MyRequests() {
         })
     }
 
-    // Generic Submit Rating
-    const handleSubmitRating = async () => {
+    const submitRating = async () => {
         if (ratingModal.rating === 0) return
         setIsProcessing(true)
 
         try {
-            // Determine roles
-            const isRatingRequester = ratingModal.targetLinkRole === 'requester'
-
-            const ratingData = {
+            // 1. Create Rating
+            await addDoc(collection(db, 'ratings'), {
+                helperId: ratingModal.helperId,
                 requestId: ratingModal.requestId,
+                requesterId: auth.currentUser.uid,
+                raterId: auth.currentUser.uid,        // New Schema compatibility
+                ratedId: ratingModal.helperId,        // New Schema compatibility
+                raterRole: 'requester',               // New Schema compatibility
+                ratedRole: 'helper',                  // New Schema compatibility
                 rating: ratingModal.rating,
-                createdAt: serverTimestamp(),
-                comment: ''
-            }
+                createdAt: serverTimestamp()
+            })
 
-            if (isRatingRequester) {
-                // I am the helper, rating the requester
-                ratingData.raterId = auth.currentUser.uid
-                ratingData.ratedId = ratingModal.targetUserId
-                ratingData.raterRole = 'helper'
-                ratingData.ratedRole = 'requester'
-            } else {
-                // I am the requester, rating the helper
-                ratingData.raterId = auth.currentUser.uid
-                ratingData.ratedId = ratingModal.helperId
-                ratingData.raterRole = 'requester'
-                ratingData.ratedRole = 'helper'
+            // 2. Update Request Status to 'completed'
+            await updateDoc(doc(db, 'requests', ratingModal.requestId), {
+                status: 'completed'
+            })
 
-                // Legacy fields (optional, but keeping for safety if other parts use them)
-                ratingData.helperId = ratingModal.helperId
-                ratingData.requesterId = auth.currentUser.uid
-            }
-
-            await addDoc(collection(db, 'ratings'), ratingData)
-
-            // If I am requester, I update status to completed.
-            if (!isRatingRequester) {
-                await updateDoc(doc(db, 'requests', ratingModal.requestId), {
-                    status: 'completed'
-                })
-            }
-
-            // Notify the rated user
+            // 3. Notify Helper
             await addDoc(collection(db, 'notifications'), {
-                recipientId: ratingData.ratedId,
+                recipientId: ratingModal.helperId,
                 type: 'rating_received',
                 title: 'You received a rating! ⭐',
-                message: `You received a ${ratingModal.rating}-star rating for your role as ${ratingData.ratedRole}!`,
+                message: `You received a ${ratingModal.rating}-star rating for your help!`,
                 requestId: ratingModal.requestId,
                 read: false,
                 createdAt: serverTimestamp()
             })
 
-            // Close chat if Request is completed (Requester action)
-            if (!isRatingRequester) {
-                const qChat = query(
-                    collection(db, 'chats'),
-                    where('requestId', '==', ratingModal.requestId)
-                )
-                const chatSnap = await getDocs(qChat)
-                chatSnap.forEach(async (docSnap) => {
-                    await deleteDoc(doc(db, 'chats', docSnap.id))
-                })
-            }
+            // 4. Close (Delete) the Chat Conversation
+            const qChat = query(
+                collection(db, 'chats'),
+                where('requestId', '==', ratingModal.requestId)
+            )
+            const chatSnap = await getDocs(qChat)
+            chatSnap.forEach(async (docSnap) => {
+                await deleteDoc(doc(db, 'chats', docSnap.id))
+            })
 
             setRatingModal({ ...ratingModal, isOpen: false })
 
@@ -394,17 +324,6 @@ export default function MyRequests() {
         } finally {
             setIsProcessing(false)
         }
-    }
-
-    const handleRateRequester = (offer) => {
-        setRatingModal({
-            isOpen: true,
-            requestId: offer.requestId,
-            targetUserId: offer.request?.userId,
-            targetLinkRole: 'requester',
-            rating: 0,
-            title: `Rate ${offer.request?.userName || 'Student'}`
-        })
     }
 
     const formatDate = (date) => {
@@ -432,36 +351,14 @@ export default function MyRequests() {
             <Section>
                 <div className="mb-10">
                     <h1 className="font-mont font-extrabold text-3xl text-dark mb-2">
-                        My Activity
+                        My Requests
                     </h1>
-                    <p className="text-gray mb-6">
-                        Manage your requests and offers.
+                    <p className="text-gray">
+                        Track the status of your help requests.
                     </p>
-
-                    {/* Tabs */}
-                    <div className="flex p-1 bg-gray-100 rounded-xl max-w-md">
-                        <button
-                            onClick={() => setActiveTab('requests')}
-                            className={`flex-1 py-2 text-sm font-bold rounded-lg transition-all duration-200 ${activeTab === 'requests'
-                                ? 'bg-white text-dark shadow-sm'
-                                : 'text-gray hover:text-dark'
-                                }`}
-                        >
-                            Asking for Help
-                        </button>
-                        <button
-                            onClick={() => setActiveTab('offers')}
-                            className={`flex-1 py-2 text-sm font-bold rounded-lg transition-all duration-200 ${activeTab === 'offers'
-                                ? 'bg-white text-dark shadow-sm'
-                                : 'text-gray hover:text-dark'
-                                }`}
-                        >
-                            Offering Help
-                        </button>
-                    </div>
                 </div>
 
-                {activeTab === 'requests' ? (
+                {
                     loading ? (
                         <div className="flex justify-center py-12">
                             <div className="w-12 h-12 border-4 border-accent/30 border-t-accent rounded-full animate-spin" />
@@ -660,109 +557,7 @@ export default function MyRequests() {
                             })}
                         </div>
                     )
-                ) : (
-                    // OFFERS TAB
-                    loadingOffers ? (
-                        <div className="flex justify-center py-12">
-                            <div className="w-12 h-12 border-4 border-accent/30 border-t-accent rounded-full animate-spin" />
-                        </div>
-                    ) : myOffers.length === 0 ? (
-                        <div className="text-center py-16 bg-white rounded-2xl shadow-sm border border-gray/10">
-                            <div className="w-16 h-16 bg-gray/5 rounded-full flex items-center justify-center mx-auto mb-4">
-                                <Heart className="text-gray/40" size={32} />
-                            </div>
-                            <h3 className="text-lg font-semibold text-dark mb-2">No offers made yet</h3>
-                            <p className="text-gray mb-6 max-w-md mx-auto">
-                                You haven't stuck your hand up for any requests yet. Check out the community requests!
-                            </p>
-                            <Link
-                                to="/"
-                                className="inline-flex items-center gap-2 px-6 py-3 bg-accent text-white font-semibold rounded-xl hover:bg-accent/90 transition-colors shadow-um6p"
-                            >
-                                Browse Requests <ArrowRight size={18} />
-                            </Link>
-                        </div>
-                    ) : (
-                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                            {myOffers.map((offer) => {
-                                const request = offer.request || {}
-                                const Icon = categoryIcons[request.category] || BookOpen
-
-                                return (
-                                    <div key={offer.id} className="bg-white rounded-xl p-6 shadow-sm border border-gray/10 hover:shadow-md transition-shadow duration-300 flex flex-col h-full">
-                                        {/* Header */}
-                                        <div className="flex items-start justify-between mb-4">
-                                            <div className="flex items-center gap-3">
-                                                <div className="w-10 h-10 rounded-lg bg-accent/10 text-accent flex items-center justify-center">
-                                                    <Icon size={20} />
-                                                </div>
-                                                <div>
-                                                    <h3 className="font-semibold text-dark">Helping: {request.category || 'Request'}</h3>
-                                                    <span className="text-xs text-gray">{request.specificDetail}</span>
-                                                </div>
-                                            </div>
-                                            <span className={`px-2 py-1 text-xs font-bold rounded-full ${offer.status === 'accepted' ? 'bg-green-100 text-green-700' :
-                                                    offer.status === 'declined' ? 'bg-red-100 text-red-700' :
-                                                        'bg-yellow-100 text-yellow-700'
-                                                }`}>
-                                                {offer.status.toUpperCase()}
-                                            </span>
-                                        </div>
-
-                                        {/* Body */}
-                                        <div className="mb-4">
-                                            <p className="text-xs text-gray font-bold uppercase mb-1">Their Request:</p>
-                                            <p className="text-gray-700 text-sm italic line-clamp-2">
-                                                "{request.details || 'Loading details...'}"
-                                            </p>
-                                        </div>
-
-                                        <div className="mb-4">
-                                            <p className="text-xs text-gray font-bold uppercase mb-1">Your Message:</p>
-                                            <p className="text-gray-700 text-sm line-clamp-2">
-                                                {offer.message}
-                                            </p>
-                                        </div>
-
-                                        {/* Footer / Actions */}
-                                        <div className="mt-auto pt-4 border-t border-gray/10">
-                                            {offer.status === 'accepted' ? (
-                                                <div className="space-y-3">
-                                                    <div className="text-xs text-green-600 font-semibold flex items-center gap-1">
-                                                        <Check size={14} /> You are helping {request.userName || 'Student'}
-                                                    </div>
-
-                                                    <div className="flex gap-2">
-                                                        <button
-                                                            onClick={() => navigate('/chat')}
-                                                            className="flex-1 py-2 rounded-lg border border-accent text-accent text-sm font-medium hover:bg-accent/5 transition-colors flex items-center justify-center gap-2"
-                                                        >
-                                                            <MessageSquare size={16} /> Chat
-                                                        </button>
-
-                                                        {/* Show Rating Button if request is completed */}
-                                                        {request.status === 'completed' && (
-                                                            <button
-                                                                onClick={() => handleRateRequester(offer)}
-                                                                className="flex-1 py-2 rounded-lg bg-yellow-400 text-white text-sm font-medium hover:bg-yellow-500 transition-colors flex items-center justify-center gap-2 shadow-sm"
-                                                            >
-                                                                <Star size={16} fill="white" /> Rate
-                                                            </button>
-                                                        )}
-                                                    </div>
-                                                </div>
-                                            ) : offer.status === 'declined' ? (
-                                                <p className="text-xs text-red-500">This offer was declined.</p>
-                                            ) : (
-                                                <p className="text-xs text-gray">Waiting for response...</p>
-                                            )}
-                                        </div>
-                                    </div>
-                                )
-                            })}
-                        </div>
-                    )
-                )}
+                }
             </Section>
             {/* Confirmation Modal */}
             {confirmation.isOpen && (
@@ -853,7 +648,7 @@ export default function MyRequests() {
                                     Later
                                 </button>
                                 <button
-                                    onClick={handleSubmitRating}
+                                    onClick={submitRating}
                                     disabled={isProcessing || ratingModal.rating === 0}
                                     className="flex-1 py-2.5 rounded-xl bg-accent text-white font-semibold hover:bg-accent/90 transition-colors shadow-lg shadow-accent/20 flex items-center justify-center disabled:opacity-50 disabled:cursor-not-allowed"
                                 >
