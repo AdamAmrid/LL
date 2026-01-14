@@ -595,8 +595,8 @@ export default function AdminDashboard() {
                                 <button
                                     onClick={confirmToggleStatus}
                                     className={`flex-1 py-2.5 rounded-xl text-white font-semibold transition-colors shadow-lg ${confirmModal.currentStatus === 'suspended'
-                                            ? 'bg-green-600 hover:bg-green-700 shadow-green-600/20'
-                                            : 'bg-red-600 hover:bg-red-700 shadow-red-600/20'
+                                        ? 'bg-green-600 hover:bg-green-700 shadow-green-600/20'
+                                        : 'bg-red-600 hover:bg-red-700 shadow-red-600/20'
                                         }`}
                                 >
                                     {confirmModal.currentStatus === 'suspended' ? 'Confirm Unblock' : 'Confirm Suspend'}
