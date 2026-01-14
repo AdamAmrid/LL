@@ -106,7 +106,12 @@ export default function AdminDashboard() {
                 const activityData = requestsSnap.docs.map(reqDoc => {
                     const req = { id: reqDoc.id, ...reqDoc.data() }
                     const acceptedOffer = allOffers.find(o => o.requestId === req.id && o.status === 'accepted')
-                    const ratingObj = allRatings.find(r => r.requestId === req.id)
+                    // Find ratings
+                    const reqRatings = allRatings.filter(r => r.requestId === req.id)
+                    // Requester -> Helper (Standard) - Check for role 'requester' or valid requesterId match if role missing (legacy)
+                    const rRating = reqRatings.find(r => r.raterRole === 'requester' || (!r.raterRole && r.requesterId === req.userId))
+                    // Helper -> Requester - Check for role 'helper'
+                    const hRating = reqRatings.find(r => r.raterRole === 'helper')
 
                     return {
                         id: req.id,
@@ -118,7 +123,8 @@ export default function AdminDashboard() {
                         createdAt: req.createdAt?.toDate ? req.createdAt.toDate() : new Date(req.createdAt),
                         helperName: acceptedOffer ? (acceptedOffer.helperName || 'Helper') : null,
                         helperEmail: acceptedOffer ? acceptedOffer.helperEmail : null,
-                        rating: ratingObj ? ratingObj.rating : null
+                        rating: rRating ? rRating.rating : null,
+                        helperRating: hRating ? hRating.rating : null
                     }
                 })
 
@@ -506,14 +512,33 @@ export default function AdminDashboard() {
                                                         )}
                                                     </td>
                                                     <td className="px-6 py-4">
-                                                        {item.rating ? (
-                                                            <div className="flex items-center text-yellow-400 gap-1">
-                                                                <Star size={14} fill="currentColor" />
-                                                                <span className="text-dark font-semibold text-sm">{item.rating}</span>
-                                                            </div>
-                                                        ) : (
-                                                            <span className="text-xs text-gray">-</span>
-                                                        )}
+                                                        <div className="flex flex-col gap-1">
+                                                            {item.rating ? (
+                                                                <div className="flex items-center text-yellow-400 gap-1" title="Student rated Helper">
+                                                                    <span className="text-xs text-gray w-4">R:</span>
+                                                                    <Star size={14} fill="currentColor" />
+                                                                    <span className="text-dark font-semibold text-sm">{item.rating}</span>
+                                                                </div>
+                                                            ) : (
+                                                                <div className="flex items-center text-gray/30 gap-1" title="No Student rating">
+                                                                    <span className="text-xs text-gray w-4">R:</span>
+                                                                    <span>-</span>
+                                                                </div>
+                                                            )}
+
+                                                            {item.helperRating ? (
+                                                                <div className="flex items-center text-yellow-400 gap-1" title="Helper rated Student">
+                                                                    <span className="text-xs text-gray w-4">H:</span>
+                                                                    <Star size={14} fill="currentColor" />
+                                                                    <span className="text-dark font-semibold text-sm">{item.helperRating}</span>
+                                                                </div>
+                                                            ) : (
+                                                                <div className="flex items-center text-gray/30 gap-1" title="No Helper rating">
+                                                                    <span className="text-xs text-gray w-4">H:</span>
+                                                                    <span>-</span>
+                                                                </div>
+                                                            )}
+                                                        </div>
                                                     </td>
                                                     <td className="px-6 py-4 text-right text-xs text-gray">
                                                         {item.createdAt.toLocaleDateString()}
