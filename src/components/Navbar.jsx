@@ -539,6 +539,12 @@ export default function Navbar({ user }) {
                 </p>
               </div>
 
+              {selectedNotification.type === 'rating_received' && (
+                <p className="text-sm font-medium text-dark mb-4 text-center">
+                  Could you rate the one to whom you offered help?
+                </p>
+              )}
+
               <div className="flex flex-col gap-3">
                 {selectedNotification.type === 'offer_accepted' ? (
                   <button
