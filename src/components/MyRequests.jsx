@@ -56,6 +56,11 @@ export default function MyRequests() {
 
     const [isProcessing, setIsProcessing] = useState(false)
 
+    // Tab State
+    const [activeTab, setActiveTab] = useState('requests') // 'requests' | 'offers'
+    const [myOffers, setMyOffers] = useState([])
+    const [loadingOffers, setLoadingOffers] = useState(true)
+
     useEffect(() => {
         if (!auth.currentUser) {
             setLoading(false)
@@ -112,6 +117,51 @@ export default function MyRequests() {
         return () => {
             unsubscribeRequests()
             unsubscribeOffers()
+        }
+        // 3. Listen for My Offers (Offers I made)
+        const qMyOffers = query(
+            collection(db, 'offers'),
+            where('helperId', '==', auth.currentUser.uid)
+        )
+
+        const unsubscribeMyOffers = onSnapshot(qMyOffers, async (snapshot) => {
+            const offersList = snapshot.docs.map(doc => ({
+                id: doc.id,
+                ...doc.data(),
+                createdAt: doc.data().createdAt?.toDate() || new Date()
+            }))
+
+            // Fetch associated request details for each offer
+            // Note: This is N+1 but acceptable for small scale. 
+            // Better: get all unique requestIds and fetchInBatches or use a separate listener for requests if needed.
+            // For now, let's just fetch the request doc for each offer one-off (no real-time updates on request details here unless we listen).
+            // Actually, we want to know the request STATUS (completed/assigned). So we should probably listen or refetch.
+            // Let's simplified: just simple getDocs for now, but real-time is better. 
+            // Given complexity, let's just fetch once on offer update.
+
+            const offersWithRequests = await Promise.all(offersList.map(async (offer) => {
+                try {
+                    const reqRef = doc(db, 'requests', offer.requestId)
+                    const reqSnap = await getDoc(reqRef)
+                    if (reqSnap.exists()) {
+                        return { ...offer, request: { id: reqSnap.id, ...reqSnap.data() } }
+                    }
+                    return offer
+                } catch (e) {
+                    return offer
+                }
+            }))
+
+            // Sort by createdAt desc
+            offersWithRequests.sort((a, b) => b.createdAt - a.createdAt)
+            setMyOffers(offersWithRequests)
+            setLoadingOffers(false)
+        })
+
+        return () => {
+            unsubscribeRequests()
+            unsubscribeOffers()
+            unsubscribeMyOffers()
         }
     }, [])
 
@@ -271,45 +321,71 @@ export default function MyRequests() {
         })
     }
 
-    const submitRating = async () => {
+    // Generic Submit Rating
+    const handleSubmitRating = async () => {
         if (ratingModal.rating === 0) return
         setIsProcessing(true)
 
         try {
-            // 1. Create Rating
-            await addDoc(collection(db, 'ratings'), {
-                helperId: ratingModal.helperId,
+            // Determine roles
+            const isRatingRequester = ratingModal.targetLinkRole === 'requester'
+
+            const ratingData = {
                 requestId: ratingModal.requestId,
-                requesterId: auth.currentUser.uid,
                 rating: ratingModal.rating,
-                createdAt: serverTimestamp()
-            })
+                createdAt: serverTimestamp(),
+                comment: ''
+            }
 
-            // 2. Update Request Status to 'completed'
-            await updateDoc(doc(db, 'requests', ratingModal.requestId), {
-                status: 'completed'
-            })
+            if (isRatingRequester) {
+                // I am the helper, rating the requester
+                ratingData.raterId = auth.currentUser.uid
+                ratingData.ratedId = ratingModal.targetUserId
+                ratingData.raterRole = 'helper'
+                ratingData.ratedRole = 'requester'
+            } else {
+                // I am the requester, rating the helper
+                ratingData.raterId = auth.currentUser.uid
+                ratingData.ratedId = ratingModal.helperId
+                ratingData.raterRole = 'requester'
+                ratingData.ratedRole = 'helper'
 
-            // 3. Notify Helper (Optional but good)
+                // Legacy fields (optional, but keeping for safety if other parts use them)
+                ratingData.helperId = ratingModal.helperId
+                ratingData.requesterId = auth.currentUser.uid
+            }
+
+            await addDoc(collection(db, 'ratings'), ratingData)
+
+            // If I am requester, I update status to completed.
+            if (!isRatingRequester) {
+                await updateDoc(doc(db, 'requests', ratingModal.requestId), {
+                    status: 'completed'
+                })
+            }
+
+            // Notify the rated user
             await addDoc(collection(db, 'notifications'), {
-                recipientId: ratingModal.helperId,
+                recipientId: ratingData.ratedId,
                 type: 'rating_received',
                 title: 'You received a rating! ⭐',
-                message: `You received a ${ratingModal.rating}-star rating for your help!`,
+                message: `You received a ${ratingModal.rating}-star rating for your role as ${ratingData.ratedRole}!`,
                 requestId: ratingModal.requestId,
                 read: false,
                 createdAt: serverTimestamp()
             })
 
-            // 4. Close (Delete) the Chat Conversation
-            const qChat = query(
-                collection(db, 'chats'),
-                where('requestId', '==', ratingModal.requestId)
-            )
-            const chatSnap = await getDocs(qChat)
-            chatSnap.forEach(async (docSnap) => {
-                await deleteDoc(doc(db, 'chats', docSnap.id))
-            })
+            // Close chat if Request is completed (Requester action)
+            if (!isRatingRequester) {
+                const qChat = query(
+                    collection(db, 'chats'),
+                    where('requestId', '==', ratingModal.requestId)
+                )
+                const chatSnap = await getDocs(qChat)
+                chatSnap.forEach(async (docSnap) => {
+                    await deleteDoc(doc(db, 'chats', docSnap.id))
+                })
+            }
 
             setRatingModal({ ...ratingModal, isOpen: false })
 
@@ -318,6 +394,17 @@ export default function MyRequests() {
         } finally {
             setIsProcessing(false)
         }
+    }
+
+    const handleRateRequester = (offer) => {
+        setRatingModal({
+            isOpen: true,
+            requestId: offer.requestId,
+            targetUserId: offer.request?.userId,
+            targetLinkRole: 'requester',
+            rating: 0,
+            title: `Rate ${offer.request?.userName || 'Student'}`
+        })
     }
 
     const formatDate = (date) => {
@@ -345,212 +432,337 @@ export default function MyRequests() {
             <Section>
                 <div className="mb-10">
                     <h1 className="font-mont font-extrabold text-3xl text-dark mb-2">
-                        My Requests
+                        My Activity
                     </h1>
-                    <p className="text-gray">
-                        Track the status of your help requests.
+                    <p className="text-gray mb-6">
+                        Manage your requests and offers.
                     </p>
+
+                    {/* Tabs */}
+                    <div className="flex p-1 bg-gray-100 rounded-xl max-w-md">
+                        <button
+                            onClick={() => setActiveTab('requests')}
+                            className={`flex-1 py-2 text-sm font-bold rounded-lg transition-all duration-200 ${activeTab === 'requests'
+                                ? 'bg-white text-dark shadow-sm'
+                                : 'text-gray hover:text-dark'
+                                }`}
+                        >
+                            Asking for Help
+                        </button>
+                        <button
+                            onClick={() => setActiveTab('offers')}
+                            className={`flex-1 py-2 text-sm font-bold rounded-lg transition-all duration-200 ${activeTab === 'offers'
+                                ? 'bg-white text-dark shadow-sm'
+                                : 'text-gray hover:text-dark'
+                                }`}
+                        >
+                            Offering Help
+                        </button>
+                    </div>
                 </div>
 
-                {loading ? (
-                    <div className="flex justify-center py-12">
-                        <div className="w-12 h-12 border-4 border-accent/30 border-t-accent rounded-full animate-spin" />
-                    </div>
-                ) : error ? (
-                    <div className="text-center py-12">
-                        <p className="text-red-600">{error}</p>
-                    </div>
-                ) : requests.length === 0 ? (
-                    <div className="text-center py-16 bg-white rounded-2xl shadow-sm border border-gray/10">
-                        <div className="w-16 h-16 bg-gray/5 rounded-full flex items-center justify-center mx-auto mb-4">
-                            <BookOpen className="text-gray/40" size={32} />
+                {activeTab === 'requests' ? (
+                    loading ? (
+                        <div className="flex justify-center py-12">
+                            <div className="w-12 h-12 border-4 border-accent/30 border-t-accent rounded-full animate-spin" />
                         </div>
-                        <h3 className="text-lg font-semibold text-dark mb-2">No requests yet</h3>
-                        <p className="text-gray mb-6 max-w-md mx-auto">
-                            You haven't submitted any help requests. If you need assistance, don't hesitate to ask the community.
-                        </p>
-                        <Link
-                            to="/request-help"
-                            className="inline-flex items-center gap-2 px-6 py-3 bg-accent text-white font-semibold rounded-xl hover:bg-accent/90 transition-colors shadow-um6p"
-                        >
-                            Request Help <ArrowRight size={18} />
-                        </Link>
-                    </div>
-                ) : (
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                        {requests.map((request) => {
-                            const Icon = categoryIcons[request.category] || BookOpen
-                            const isUrgent = request.urgency === 'urgent'
-                            const requestOffers = offers[request.id] || []
+                    ) : error ? (
+                        <div className="text-center py-12">
+                            <p className="text-red-600">{error}</p>
+                        </div>
+                    ) : requests.length === 0 ? (
+                        <div className="text-center py-16 bg-white rounded-2xl shadow-sm border border-gray/10">
+                            <div className="w-16 h-16 bg-gray/5 rounded-full flex items-center justify-center mx-auto mb-4">
+                                <BookOpen className="text-gray/40" size={32} />
+                            </div>
+                            <h3 className="text-lg font-semibold text-dark mb-2">No requests yet</h3>
+                            <p className="text-gray mb-6 max-w-md mx-auto">
+                                You haven't submitted any help requests. If you need assistance, don't hesitate to ask the community.
+                            </p>
+                            <Link
+                                to="/request-help"
+                                className="inline-flex items-center gap-2 px-6 py-3 bg-accent text-white font-semibold rounded-xl hover:bg-accent/90 transition-colors shadow-um6p"
+                            >
+                                Request Help <ArrowRight size={18} />
+                            </Link>
+                        </div>
+                    ) : (
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                            {requests.map((request) => {
+                                const Icon = categoryIcons[request.category] || BookOpen
+                                const isUrgent = request.urgency === 'urgent'
+                                const requestOffers = offers[request.id] || []
 
-                            return (
-                                <div key={request.id} className="bg-white rounded-xl p-6 shadow-sm border border-gray/10 hover:shadow-md transition-shadow duration-300 flex flex-col h-full">
-                                    {/* Header */}
-                                    <div className="flex items-start justify-between mb-4">
-                                        <div className="flex items-center gap-3">
-                                            <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${isUrgent ? 'bg-red-100 text-red-600' : 'bg-accent/10 text-accent'
+                                return (
+                                    <div key={request.id} className="bg-white rounded-xl p-6 shadow-sm border border-gray/10 hover:shadow-md transition-shadow duration-300 flex flex-col h-full">
+                                        {/* Header */}
+                                        <div className="flex items-start justify-between mb-4">
+                                            <div className="flex items-center gap-3">
+                                                <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${isUrgent ? 'bg-red-100 text-red-600' : 'bg-accent/10 text-accent'
+                                                    }`}>
+                                                    <Icon size={20} />
+                                                </div>
+                                                <div>
+                                                    <h3 className="font-semibold text-dark">{request.category}</h3>
+                                                    <span className="text-xs text-gray">{request.specificDetail}</span>
+                                                </div>
+                                            </div>
+                                            <span className={`px-2 py-1 text-xs font-bold rounded-full ${request.status === 'open'
+                                                ? 'bg-green-100 text-green-700'
+                                                : request.status === 'assigned'
+                                                    ? 'bg-blue-100 text-blue-700'
+                                                    : 'bg-gray-100 text-gray-700'
                                                 }`}>
-                                                <Icon size={20} />
-                                            </div>
-                                            <div>
-                                                <h3 className="font-semibold text-dark">{request.category}</h3>
-                                                <span className="text-xs text-gray">{request.specificDetail}</span>
-                                            </div>
+                                                {request.status.toUpperCase()}
+                                            </span>
                                         </div>
-                                        <span className={`px-2 py-1 text-xs font-bold rounded-full ${request.status === 'open'
-                                            ? 'bg-green-100 text-green-700'
-                                            : request.status === 'assigned'
-                                                ? 'bg-blue-100 text-blue-700'
-                                                : 'bg-gray-100 text-gray-700'
-                                            }`}>
-                                            {request.status.toUpperCase()}
-                                        </span>
-                                    </div>
 
-                                    {/* Body */}
-                                    <p className="text-gray-700 text-sm mb-6 flex-grow line-clamp-3">
-                                        {request.details}
-                                    </p>
+                                        {/* Body */}
+                                        <p className="text-gray-700 text-sm mb-6 flex-grow line-clamp-3">
+                                            {request.details}
+                                        </p>
 
-                                    {/* Offers Section */}
-                                    {requestOffers.length > 0 && (
-                                        <div className="mb-4 bg-secondary/30 rounded-lg p-3 border border-gray/10">
-                                            <h4 className="text-xs font-bold text-dark uppercase mb-2 flex items-center gap-1">
-                                                <MessageSquare size={12} /> Pending Offers
-                                            </h4>
-                                            <div className="space-y-2">
-                                                {requestOffers.map(offer => (
-                                                    <div key={offer.id} className="bg-white p-3 rounded-lg border border-gray/10 text-sm shadow-sm">
-                                                        <div className="flex items-center gap-2 mb-2 pb-2 border-b border-gray/5">
-                                                            <div className="w-6 h-6 rounded-full bg-accent/10 flex items-center justify-center text-accent">
-                                                                <User size={14} />
-                                                            </div>
-                                                            <span className="font-semibold text-dark text-xs">{offer.helperEmail}</span>
-                                                        </div>
-                                                        <p className="text-dark mb-1 italic">"{offer.message}"</p>
-
-                                                        {offer.status === 'accepted' ? (
-                                                            <div className="flex flex-col gap-2 mt-2">
-                                                                <div className="flex items-center gap-2 text-green-600 font-semibold text-xs flex-grow">
-                                                                    <Check size={14} /> Accepted • {offer.helperEmail}
+                                        {/* Offers Section */}
+                                        {requestOffers.length > 0 && (
+                                            <div className="mb-4 bg-secondary/30 rounded-lg p-3 border border-gray/10">
+                                                <h4 className="text-xs font-bold text-dark uppercase mb-2 flex items-center gap-1">
+                                                    <MessageSquare size={12} /> Pending Offers
+                                                </h4>
+                                                <div className="space-y-2">
+                                                    {requestOffers.map(offer => (
+                                                        <div key={offer.id} className="bg-white p-3 rounded-lg border border-gray/10 text-sm shadow-sm">
+                                                            <div className="flex items-center gap-2 mb-2 pb-2 border-b border-gray/5">
+                                                                <div className="w-6 h-6 rounded-full bg-accent/10 flex items-center justify-center text-accent">
+                                                                    <User size={14} />
                                                                 </div>
-                                                                <div className="flex gap-2">
-                                                                    <button
-                                                                        onClick={() => {
-                                                                            // Quick find chat logic could be better, but for now navigate to specific chat if we can find it, 
-                                                                            // or just /chat to let list load. 
-                                                                            // Ideal: We should probably fetch chat ID or navigate to /chat and let user find it.
-                                                                            // Or, assume we can query it quickly.
-                                                                            // Let's just go to /chat for now? No, user expects specific chat.
-                                                                            // Let's do a quick lookup on click or better yet, link to it if we had it.
-                                                                            // Since we don't have chatId in the 'offers' collection, we have to query.
-                                                                            // We can do an async lookup here.
-                                                                            const findChat = async () => {
-                                                                                try {
-                                                                                    const q = query(
-                                                                                        collection(db, 'chats'),
-                                                                                        where('requestId', '==', request.id),
-                                                                                        // Just query by participants containing helper, we'll filter client side for safety or check doc
-                                                                                        where('participants', 'array-contains', offer.helperId)
-                                                                                    )
-                                                                                    const snap = await getDocs(q)
-                                                                                    if (!snap.empty) {
-                                                                                        const chatDoc = snap.docs[0]
-                                                                                        const chatData = chatDoc.data()
+                                                                <span className="font-semibold text-dark text-xs">{offer.helperEmail}</span>
+                                                            </div>
+                                                            <p className="text-dark mb-1 italic">"{offer.message}"</p>
 
-                                                                                        // Check if I am in participants
-                                                                                        if (!chatData.participants.includes(auth.currentUser.uid)) {
-                                                                                            // I deleted it, so add me back (revive)
-                                                                                            await updateDoc(doc(db, 'chats', chatDoc.id), {
-                                                                                                participants: [...chatData.participants, auth.currentUser.uid]
-                                                                                            })
+                                                            {offer.status === 'accepted' ? (
+                                                                <div className="flex flex-col gap-2 mt-2">
+                                                                    <div className="flex items-center gap-2 text-green-600 font-semibold text-xs flex-grow">
+                                                                        <Check size={14} /> Accepted • {offer.helperEmail}
+                                                                    </div>
+                                                                    <div className="flex gap-2">
+                                                                        <button
+                                                                            onClick={() => {
+                                                                                // Quick find chat logic could be better, but for now navigate to specific chat if we can find it, 
+                                                                                // or just /chat to let list load. 
+                                                                                // Ideal: We should probably fetch chat ID or navigate to /chat and let user find it.
+                                                                                // Or, assume we can query it quickly.
+                                                                                // Let's just go to /chat for now? No, user expects specific chat.
+                                                                                // Let's do a quick lookup on click or better yet, link to it if we had it.
+                                                                                // Since we don't have chatId in the 'offers' collection, we have to query.
+                                                                                // We can do an async lookup here.
+                                                                                const findChat = async () => {
+                                                                                    try {
+                                                                                        const q = query(
+                                                                                            collection(db, 'chats'),
+                                                                                            where('requestId', '==', request.id),
+                                                                                            // Just query by participants containing helper, we'll filter client side for safety or check doc
+                                                                                            where('participants', 'array-contains', offer.helperId)
+                                                                                        )
+                                                                                        const snap = await getDocs(q)
+                                                                                        if (!snap.empty) {
+                                                                                            const chatDoc = snap.docs[0]
+                                                                                            const chatData = chatDoc.data()
+
+                                                                                            // Check if I am in participants
+                                                                                            if (!chatData.participants.includes(auth.currentUser.uid)) {
+                                                                                                // I deleted it, so add me back (revive)
+                                                                                                await updateDoc(doc(db, 'chats', chatDoc.id), {
+                                                                                                    participants: [...chatData.participants, auth.currentUser.uid]
+                                                                                                })
+                                                                                            }
+                                                                                            navigate(`/chat/${chatDoc.id}`)
+                                                                                        } else {
+                                                                                            // Should create if not exists, but 'accept' logic usually creates it.
+                                                                                            navigate('/chat')
                                                                                         }
-                                                                                        navigate(`/chat/${chatDoc.id}`)
-                                                                                    } else {
-                                                                                        // Should create if not exists, but 'accept' logic usually creates it.
+                                                                                    } catch (err) {
+                                                                                        console.error("Error finding chat:", err)
                                                                                         navigate('/chat')
                                                                                     }
-                                                                                } catch (err) {
-                                                                                    console.error("Error finding chat:", err)
-                                                                                    navigate('/chat')
                                                                                 }
-                                                                            }
-                                                                            findChat()
-                                                                        }}
-                                                                        className="flex items-center gap-1 bg-accent/10 text-accent px-3 py-1.5 rounded-md text-xs font-semibold hover:bg-accent/20 transition-colors"
-                                                                    >
-                                                                        <MessageSquare size={14} /> Chat
-                                                                    </button>
-
-                                                                    {request.status !== 'completed' && (
-                                                                        <button
-                                                                            onClick={() => handleComplete(request, offer.helperId)}
-                                                                            className="flex-1 flex items-center justify-center gap-1 bg-green-100 text-green-700 py-1.5 rounded-md text-xs font-semibold hover:bg-green-200 transition-colors"
+                                                                                findChat()
+                                                                            }}
+                                                                            className="flex items-center gap-1 bg-accent/10 text-accent px-3 py-1.5 rounded-md text-xs font-semibold hover:bg-accent/20 transition-colors"
                                                                         >
-                                                                            <Check size={14} /> Mark Done
+                                                                            <MessageSquare size={14} /> Chat
                                                                         </button>
-                                                                    )}
-                                                                </div>
-                                                            </div>
-                                                        ) : (
-                                                            <div className="flex items-center gap-2 mt-2">
-                                                                <button
-                                                                    onClick={() => handleAcceptOffer(offer, request)}
-                                                                    className="flex-1 flex items-center justify-center gap-1 bg-green-50 text-green-700 hover:bg-green-100 py-1.5 rounded-md text-xs font-semibold transition-colors"
-                                                                >
-                                                                    <Check size={14} /> Accept
-                                                                </button>
-                                                                <button
-                                                                    onClick={() => onDeclineClick(offer, request.id)}
-                                                                    className="flex-1 flex items-center justify-center gap-1 bg-red-50 text-red-700 hover:bg-red-100 py-1.5 rounded-md text-xs font-semibold transition-colors"
-                                                                >
-                                                                    <X size={14} /> Decline
-                                                                </button>
-                                                            </div>
-                                                        )}
-                                                    </div>
-                                                ))}
-                                            </div>
-                                        </div>
-                                    )}
 
-                                    {/* Footer */}
-                                    <div className="pt-4 border-t border-gray/10 flex items-center justify-between text-xs text-gray">
-                                        <div className="flex items-center gap-2">
-                                            <Calendar size={14} />
-                                            <span>{formatDate(request.createdAt)}</span>
-                                        </div>
-                                        {isUrgent && (
-                                            <div className="flex items-center gap-1 text-red-600 font-semibold">
-                                                <Clock size={14} />
-                                                <span>Urgent</span>
+                                                                        {request.status !== 'completed' && (
+                                                                            <button
+                                                                                onClick={() => handleComplete(request, offer.helperId)}
+                                                                                className="flex-1 flex items-center justify-center gap-1 bg-green-100 text-green-700 py-1.5 rounded-md text-xs font-semibold hover:bg-green-200 transition-colors"
+                                                                            >
+                                                                                <Check size={14} /> Mark Done
+                                                                            </button>
+                                                                        )}
+                                                                    </div>
+                                                                </div>
+                                                            ) : (
+                                                                <div className="flex items-center gap-2 mt-2">
+                                                                    <button
+                                                                        onClick={() => handleAcceptOffer(offer, request)}
+                                                                        className="flex-1 flex items-center justify-center gap-1 bg-green-50 text-green-700 hover:bg-green-100 py-1.5 rounded-md text-xs font-semibold transition-colors"
+                                                                    >
+                                                                        <Check size={14} /> Accept
+                                                                    </button>
+                                                                    <button
+                                                                        onClick={() => onDeclineClick(offer, request.id)}
+                                                                        className="flex-1 flex items-center justify-center gap-1 bg-red-50 text-red-700 hover:bg-red-100 py-1.5 rounded-md text-xs font-semibold transition-colors"
+                                                                    >
+                                                                        <X size={14} /> Decline
+                                                                    </button>
+                                                                </div>
+                                                            )}
+                                                        </div>
+                                                    ))}
+                                                </div>
                                             </div>
                                         )}
-                                    </div>
 
-                                    {/* Actions */}
-                                    <div className="mt-4 pt-4 border-t border-gray/10 flex items-center gap-2">
-                                        <button
-                                            onClick={() => navigate(`/edit-request/${request.id}`)}
-                                            className="flex-1 flex items-center justify-center gap-2 py-2 rounded-lg border border-gray/20 text-gray hover:text-accent hover:border-accent hover:bg-accent/5 transition-all text-sm font-medium"
-                                        >
-                                            <Edit2 size={16} />
-                                            Edit
-                                        </button>
-                                        <button
-                                            onClick={() => handleDelete(request.id)}
-                                            className="flex-1 flex items-center justify-center gap-2 py-2 rounded-lg border border-gray/20 text-gray hover:text-red-600 hover:border-red-200 hover:bg-red-50 transition-all text-sm font-medium"
-                                        >
-                                            <Trash2 size={16} />
-                                            Delete
-                                        </button>
+                                        {/* Footer */}
+                                        <div className="pt-4 border-t border-gray/10 flex items-center justify-between text-xs text-gray">
+                                            <div className="flex items-center gap-2">
+                                                <Calendar size={14} />
+                                                <span>{formatDate(request.createdAt)}</span>
+                                            </div>
+                                            {isUrgent && (
+                                                <div className="flex items-center gap-1 text-red-600 font-semibold">
+                                                    <Clock size={14} />
+                                                    <span>Urgent</span>
+                                                </div>
+                                            )}
+                                        </div>
+
+                                        {/* Actions */}
+                                        <div className="mt-4 pt-4 border-t border-gray/10 flex items-center gap-2">
+                                            <button
+                                                onClick={() => navigate(`/edit-request/${request.id}`)}
+                                                className="flex-1 flex items-center justify-center gap-2 py-2 rounded-lg border border-gray/20 text-gray hover:text-accent hover:border-accent hover:bg-accent/5 transition-all text-sm font-medium"
+                                            >
+                                                <Edit2 size={16} />
+                                                Edit
+                                            </button>
+                                            <button
+                                                onClick={() => handleDelete(request.id)}
+                                                className="flex-1 flex items-center justify-center gap-2 py-2 rounded-lg border border-gray/20 text-gray hover:text-red-600 hover:border-red-200 hover:bg-red-50 transition-all text-sm font-medium"
+                                            >
+                                                <Trash2 size={16} />
+                                                Delete
+                                            </button>
+                                        </div>
                                     </div>
-                                </div>
-                            )
-                        })}
-                    </div>
-                )
-                }
+                                )
+                            })}
+                        </div>
+                    )
+                ) : (
+                    // OFFERS TAB
+                    loadingOffers ? (
+                        <div className="flex justify-center py-12">
+                            <div className="w-12 h-12 border-4 border-accent/30 border-t-accent rounded-full animate-spin" />
+                        </div>
+                    ) : myOffers.length === 0 ? (
+                        <div className="text-center py-16 bg-white rounded-2xl shadow-sm border border-gray/10">
+                            <div className="w-16 h-16 bg-gray/5 rounded-full flex items-center justify-center mx-auto mb-4">
+                                <Heart className="text-gray/40" size={32} />
+                            </div>
+                            <h3 className="text-lg font-semibold text-dark mb-2">No offers made yet</h3>
+                            <p className="text-gray mb-6 max-w-md mx-auto">
+                                You haven't stuck your hand up for any requests yet. Check out the community requests!
+                            </p>
+                            <Link
+                                to="/"
+                                className="inline-flex items-center gap-2 px-6 py-3 bg-accent text-white font-semibold rounded-xl hover:bg-accent/90 transition-colors shadow-um6p"
+                            >
+                                Browse Requests <ArrowRight size={18} />
+                            </Link>
+                        </div>
+                    ) : (
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                            {myOffers.map((offer) => {
+                                const request = offer.request || {}
+                                const Icon = categoryIcons[request.category] || BookOpen
+
+                                return (
+                                    <div key={offer.id} className="bg-white rounded-xl p-6 shadow-sm border border-gray/10 hover:shadow-md transition-shadow duration-300 flex flex-col h-full">
+                                        {/* Header */}
+                                        <div className="flex items-start justify-between mb-4">
+                                            <div className="flex items-center gap-3">
+                                                <div className="w-10 h-10 rounded-lg bg-accent/10 text-accent flex items-center justify-center">
+                                                    <Icon size={20} />
+                                                </div>
+                                                <div>
+                                                    <h3 className="font-semibold text-dark">Helping: {request.category || 'Request'}</h3>
+                                                    <span className="text-xs text-gray">{request.specificDetail}</span>
+                                                </div>
+                                            </div>
+                                            <span className={`px-2 py-1 text-xs font-bold rounded-full ${offer.status === 'accepted' ? 'bg-green-100 text-green-700' :
+                                                    offer.status === 'declined' ? 'bg-red-100 text-red-700' :
+                                                        'bg-yellow-100 text-yellow-700'
+                                                }`}>
+                                                {offer.status.toUpperCase()}
+                                            </span>
+                                        </div>
+
+                                        {/* Body */}
+                                        <div className="mb-4">
+                                            <p className="text-xs text-gray font-bold uppercase mb-1">Their Request:</p>
+                                            <p className="text-gray-700 text-sm italic line-clamp-2">
+                                                "{request.details || 'Loading details...'}"
+                                            </p>
+                                        </div>
+
+                                        <div className="mb-4">
+                                            <p className="text-xs text-gray font-bold uppercase mb-1">Your Message:</p>
+                                            <p className="text-gray-700 text-sm line-clamp-2">
+                                                {offer.message}
+                                            </p>
+                                        </div>
+
+                                        {/* Footer / Actions */}
+                                        <div className="mt-auto pt-4 border-t border-gray/10">
+                                            {offer.status === 'accepted' ? (
+                                                <div className="space-y-3">
+                                                    <div className="text-xs text-green-600 font-semibold flex items-center gap-1">
+                                                        <Check size={14} /> You are helping {request.userName || 'Student'}
+                                                    </div>
+
+                                                    <div className="flex gap-2">
+                                                        <button
+                                                            onClick={() => navigate('/chat')}
+                                                            className="flex-1 py-2 rounded-lg border border-accent text-accent text-sm font-medium hover:bg-accent/5 transition-colors flex items-center justify-center gap-2"
+                                                        >
+                                                            <MessageSquare size={16} /> Chat
+                                                        </button>
+
+                                                        {/* Show Rating Button if request is completed */}
+                                                        {request.status === 'completed' && (
+                                                            <button
+                                                                onClick={() => handleRateRequester(offer)}
+                                                                className="flex-1 py-2 rounded-lg bg-yellow-400 text-white text-sm font-medium hover:bg-yellow-500 transition-colors flex items-center justify-center gap-2 shadow-sm"
+                                                            >
+                                                                <Star size={16} fill="white" /> Rate
+                                                            </button>
+                                                        )}
+                                                    </div>
+                                                </div>
+                                            ) : offer.status === 'declined' ? (
+                                                <p className="text-xs text-red-500">This offer was declined.</p>
+                                            ) : (
+                                                <p className="text-xs text-gray">Waiting for response...</p>
+                                            )}
+                                        </div>
+                                    </div>
+                                )
+                            })}
+                        </div>
+                    )
+                )}
             </Section>
             {/* Confirmation Modal */}
             {confirmation.isOpen && (
@@ -610,7 +822,9 @@ export default function MyRequests() {
                                 <Star size={32} fill="currentColor" />
                             </div>
 
-                            <h3 className="text-xl font-bold text-dark mb-2">Rate your Helper</h3>
+                            <h3 className="text-xl font-bold text-dark mb-2">
+                                {ratingModal.title || 'Rate your Helper'}
+                            </h3>
                             <p className="text-gray text-sm mb-6">
                                 How was your experience? Your feedback helps the community grow.
                             </p>
@@ -639,7 +853,7 @@ export default function MyRequests() {
                                     Later
                                 </button>
                                 <button
-                                    onClick={submitRating}
+                                    onClick={handleSubmitRating}
                                     disabled={isProcessing || ratingModal.rating === 0}
                                     className="flex-1 py-2.5 rounded-xl bg-accent text-white font-semibold hover:bg-accent/90 transition-colors shadow-lg shadow-accent/20 flex items-center justify-center disabled:opacity-50 disabled:cursor-not-allowed"
                                 >
