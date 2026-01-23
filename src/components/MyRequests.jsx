@@ -301,7 +301,7 @@ export default function MyRequests() {
                 recipientId: ratingModal.helperId,
                 type: 'rating_received',
                 title: 'You received a rating! ⭐',
-                message: `You received a ${ratingModal.rating}-star rating for your help!`,
+                message: `You received a new rating for your help!`,
                 requestId: ratingModal.requestId,
                 read: false,
                 createdAt: serverTimestamp()

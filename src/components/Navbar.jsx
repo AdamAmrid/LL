@@ -78,6 +78,42 @@ export default function Navbar({ user }) {
 
       setNotifications(notifs)
       setUnreadCount(notifs.filter(n => !n.read).length)
+
+      // Auto-Popup for Rating
+      const unreadRating = notifs.find(n => n.type === 'rating_received' && !n.read)
+      if (unreadRating && !ratingModal.isOpen) {
+        // Prevent multiple triggers or potential loops with a simple check or local state if needed
+        // For now, we fetch and open, and marking read is crucial.
+        // We use a small timeout to let the UI settle
+        setTimeout(async () => {
+          try {
+            // Double check if still unread to avoid race conditions
+            const notifRef = doc(db, 'notifications', unreadRating.id)
+            const notifSnap = await getDoc(notifRef) // Re-fetch to be sure
+            if (notifSnap.exists() && !notifSnap.data().read) {
+              const reqRef = doc(db, 'requests', unreadRating.requestId)
+              const reqSnap = await getDoc(reqRef)
+              if (reqSnap.exists()) {
+                const reqData = reqSnap.data()
+
+                // Open Modal
+                setRatingModal({
+                  isOpen: true,
+                  requestId: unreadRating.requestId,
+                  targetUserId: reqData.userId,
+                  targetUserName: reqData.userName || 'Student',
+                  rating: 0
+                })
+
+                // Mark as read immediately to stop loop
+                await updateDoc(notifRef, { read: true })
+              }
+            }
+          } catch (e) {
+            console.error("Auto-open rating error:", e)
+          }
+        }, 500)
+      }
     }, (error) => {
       console.error("Error listening to notifications:", error)
     })
@@ -190,7 +226,7 @@ export default function Navbar({ user }) {
         recipientId: ratingModal.targetUserId,
         type: 'rating_received',
         title: 'You received a rating! ⭐',
-        message: `Your helper rated you ${ratingModal.rating} stars!`,
+        message: `Your helper has submitted a rating for you.`,
         requestId: ratingModal.requestId,
         read: false,
         createdAt: serverTimestamp()
