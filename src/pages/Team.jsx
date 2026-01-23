@@ -1,5 +1,5 @@
 import Section from '../components/Section'
-import { Users, Cog, Lightbulb } from 'lucide-react'
+import { Users, Cog, Lightbulb, ExternalLink } from 'lucide-react'
 
 export default function Team() {
   return (
@@ -162,6 +162,19 @@ export default function Team() {
                 </div>
               </div>
             </div>
+          </div>
+
+          {/* Organizational Chart Link */}
+          <div className="flex justify-center pt-8">
+            <a
+              href="https://descriptive-crater-add.notion.site/Organizational-Structure-2f163097f303807bbcf0e357a47f1313"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-2 px-6 py-3 bg-white border border-gray/20 rounded-xl shadow-sm text-dark font-semibold hover:bg-gray-50 hover:text-accent transition-colors"
+            >
+              View Organizational Chart
+              <ExternalLink size={18} />
+            </a>
           </div>
         </div>
       </Section>
