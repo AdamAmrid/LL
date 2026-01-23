@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { collection, query, where, addDoc, serverTimestamp, onSnapshot } from 'firebase/firestore'
+import { collection, query, where, addDoc, serverTimestamp, onSnapshot, doc, getDoc } from 'firebase/firestore'
 import { db, auth } from '../firebase'
 import Section from '../components/Section'
 import { useNavigate } from 'react-router-dom'
@@ -38,6 +38,33 @@ export default function RequestsList() {
     const [offerSent, setOfferSent] = useState(false)
 
     const navigate = useNavigate()
+
+    // Check for Admin Role and Redirect
+    useEffect(() => {
+        const checkAdmin = async () => {
+            const user = auth.currentUser
+            if (!user) return
+
+            // 1. Email Check (Hardcoded for safety/backup)
+            if (user.email?.toLowerCase().trim() === 'shephardjack977@gmail.com') {
+                navigate('/admin', { replace: true })
+                return
+            }
+
+            // 2. Firestore Role Check
+            try {
+                const userDocRef = doc(db, 'users', user.uid)
+                const userDocSnap = await getDoc(userDocRef)
+                if (userDocSnap.exists() && userDocSnap.data().role === 'admin') {
+                    navigate('/admin', { replace: true })
+                }
+            } catch (err) {
+                console.error("Error checking admin role:", err)
+            }
+        }
+
+        checkAdmin()
+    }, [navigate])
 
     useEffect(() => {
         setLoading(true)
