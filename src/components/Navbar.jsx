@@ -128,7 +128,7 @@ export default function Navbar({ user }) {
                   targetUserName = reqData.userName || 'Student'
                 }
 
-                if (targetUserId) {
+                if (targetUserId && targetUserId !== user.uid) {
                   setRatingModal({
                     isOpen: true,
                     requestId: unreadRating.requestId,
@@ -249,11 +249,20 @@ export default function Navbar({ user }) {
       // Let's rely on checking the request or passing a flag.
       // Simplest: Check if user.uid matches request.userId (we'll fetch request to be safe or store it)
 
+      // Simplest: Check if user.uid matches request.userId (we'll fetch request to be safe or store it)
+
       const reqRef = doc(db, 'requests', ratingModal.requestId)
       const reqSnap = await getDoc(reqRef)
       if (!reqSnap.exists()) return // Should not happen
 
       const reqData = reqSnap.data()
+      if (ratingModal.targetUserId === user.uid) {
+        console.error("Self-rating prevented")
+        setIsProcessing(false)
+        setRatingModal({ ...ratingModal, isOpen: false })
+        return
+      }
+
       const isRequester = user.uid === reqData.userId
 
       await addDoc(collection(db, 'ratings'), {
@@ -693,7 +702,7 @@ export default function Navbar({ user }) {
                             targetUserName = reqData.userName || 'Student'
                           }
 
-                          if (targetUserId) {
+                          if (targetUserId && targetUserId !== user.uid) {
                             setRatingModal({
                               isOpen: true,
                               requestId: selectedNotification.requestId,
@@ -702,7 +711,7 @@ export default function Navbar({ user }) {
                               rating: 0
                             })
                           } else {
-                            console.error("Target user ID not found")
+                            console.warn("Target user ID not found or is self")
                           }
                           setSelectedNotification(null)
                         } else {
