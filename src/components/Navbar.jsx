@@ -82,30 +82,62 @@ export default function Navbar({ user }) {
       // Auto-Popup for Rating
       const unreadRating = notifs.find(n => n.type === 'rating_received' && !n.read)
       if (unreadRating && !ratingModal.isOpen) {
-        // Prevent multiple triggers or potential loops with a simple check or local state if needed
-        // For now, we fetch and open, and marking read is crucial.
-        // We use a small timeout to let the UI settle
         setTimeout(async () => {
           try {
-            // Double check if still unread to avoid race conditions
             const notifRef = doc(db, 'notifications', unreadRating.id)
-            const notifSnap = await getDoc(notifRef) // Re-fetch to be sure
+            const notifSnap = await getDoc(notifRef)
             if (notifSnap.exists() && !notifSnap.data().read) {
               const reqRef = doc(db, 'requests', unreadRating.requestId)
               const reqSnap = await getDoc(reqRef)
               if (reqSnap.exists()) {
                 const reqData = reqSnap.data()
 
-                // Open Modal
-                setRatingModal({
-                  isOpen: true,
-                  requestId: unreadRating.requestId,
-                  targetUserId: reqData.userId,
-                  targetUserName: reqData.userName || 'Student',
-                  rating: 0
-                })
+                // Check if I already rated this request
+                const qRating = query(
+                  collection(db, 'ratings'),
+                  where('requestId', '==', unreadRating.requestId),
+                  where('raterId', '==', user.uid)
+                )
+                const ratingSnap = await getDocs(qRating)
 
-                // Mark as read immediately to stop loop
+                if (!ratingSnap.empty) {
+                  // Already rated, just mark notification as read
+                  await updateDoc(notifRef, { read: true })
+                  return
+                }
+
+                // Determine target to rate
+                const isRequester = user.uid === reqData.userId
+                let targetUserId
+                let targetUserName = 'User'
+
+                if (isRequester) {
+                  // I am Requester, I rate Helper
+                  targetUserId = reqData.assignedTo
+                  // Try to get helper name if possible, else generic
+                  targetUserName = 'Your Helper'
+                  if (targetUserId) {
+                    try {
+                      const uSnap = await getDoc(doc(db, 'users', targetUserId))
+                      if (uSnap.exists()) targetUserName = uSnap.data().displayName || uSnap.data().email || 'Helper'
+                    } catch (e) { }
+                  }
+                } else {
+                  // I am Helper, I rate Requester
+                  targetUserId = reqData.userId
+                  targetUserName = reqData.userName || 'Student'
+                }
+
+                if (targetUserId) {
+                  setRatingModal({
+                    isOpen: true,
+                    requestId: unreadRating.requestId,
+                    targetUserId: targetUserId,
+                    targetUserName: targetUserName,
+                    rating: 0
+                  })
+                }
+
                 await updateDoc(notifRef, { read: true })
               }
             }
@@ -210,23 +242,37 @@ export default function Navbar({ user }) {
     setIsProcessing(true)
 
     try {
+      // Determine roles based on who is rating
+      // If current user is the Requester (creator of request), they are rating the Helper
+      // WE NEED TO KNOW WHO IS WHO. 
+      // We can fetch the request again or pass this info into ratingModal state.
+      // Let's rely on checking the request or passing a flag.
+      // Simplest: Check if user.uid matches request.userId (we'll fetch request to be safe or store it)
+
+      const reqRef = doc(db, 'requests', ratingModal.requestId)
+      const reqSnap = await getDoc(reqRef)
+      if (!reqSnap.exists()) return // Should not happen
+
+      const reqData = reqSnap.data()
+      const isRequester = user.uid === reqData.userId
+
       await addDoc(collection(db, 'ratings'), {
         requestId: ratingModal.requestId,
         raterId: user.uid,
         ratedId: ratingModal.targetUserId,
-        raterRole: 'helper',
-        ratedRole: 'requester',
+        raterRole: isRequester ? 'requester' : 'helper',
+        ratedRole: isRequester ? 'helper' : 'requester',
         rating: ratingModal.rating,
         createdAt: serverTimestamp(),
         comment: ''
       })
 
-      // Notify Requester
+      // Notify the other party
       await addDoc(collection(db, 'notifications'), {
         recipientId: ratingModal.targetUserId,
         type: 'rating_received',
         title: 'You received a rating! ⭐',
-        message: `Your helper has submitted a rating for you.`,
+        message: `Your ${isRequester ? 'student' : 'helper'} has submitted a rating for you.`,
         requestId: ratingModal.requestId,
         read: false,
         createdAt: serverTimestamp()
@@ -577,7 +623,7 @@ export default function Navbar({ user }) {
 
               {selectedNotification.type === 'rating_received' && (
                 <p className="text-sm font-medium text-dark mb-4 text-center">
-                  Could you rate the one to whom you offered help?
+                  Would you like to rate them back?
                 </p>
               )}
 
@@ -607,22 +653,59 @@ export default function Navbar({ user }) {
                 ) : selectedNotification.type === 'rating_received' ? (
                   <button
                     onClick={async () => {
-                      // Fetch request to get Requester ID
+                      // Rate Back Action
+                      // Check if already rated
+                      const qRating = query(
+                        collection(db, 'ratings'),
+                        where('requestId', '==', selectedNotification.requestId),
+                        where('raterId', '==', user.uid)
+                      )
+                      const ratingSnap = await getDocs(qRating)
+
+                      if (!ratingSnap.empty) {
+                        alert("You have already submitted a rating for this request.")
+                        setSelectedNotification(null)
+                        return
+                      }
+
+                      // Fetch request to get details
                       try {
                         const reqRef = doc(db, 'requests', selectedNotification.requestId)
                         const reqSnap = await getDoc(reqRef)
                         if (reqSnap.exists()) {
                           const reqData = reqSnap.data()
-                          setRatingModal({
-                            isOpen: true,
-                            requestId: selectedNotification.requestId,
-                            targetUserId: reqData.userId, // Requester
-                            targetUserName: reqData.userName || 'Student',
-                            rating: 0
-                          })
+
+                          const isRequester = user.uid === reqData.userId
+                          let targetUserId
+                          let targetUserName = 'User'
+
+                          if (isRequester) {
+                            targetUserId = reqData.assignedTo
+                            targetUserName = 'Your Helper'
+                            if (targetUserId) {
+                              try {
+                                const uSnap = await getDoc(doc(db, 'users', targetUserId))
+                                if (uSnap.exists()) targetUserName = uSnap.data().displayName || uSnap.data().email || 'Helper'
+                              } catch (e) { }
+                            }
+                          } else {
+                            targetUserId = reqData.userId
+                            targetUserName = reqData.userName || 'Student'
+                          }
+
+                          if (targetUserId) {
+                            setRatingModal({
+                              isOpen: true,
+                              requestId: selectedNotification.requestId,
+                              targetUserId: targetUserId,
+                              targetUserName: targetUserName,
+                              rating: 0
+                            })
+                          } else {
+                            console.error("Target user ID not found")
+                          }
                           setSelectedNotification(null)
                         } else {
-                          // Handle case where request might be deleted or not found
                           console.error("Request not found for rating")
                           setSelectedNotification(null)
                         }
@@ -633,7 +716,7 @@ export default function Navbar({ user }) {
                     className="w-full py-2.5 rounded-xl bg-yellow-400 text-white font-semibold hover:bg-yellow-500 transition-colors shadow-lg shadow-yellow-400/20 flex items-center justify-center gap-2"
                   >
                     <Star size={18} fill="currentColor" />
-                    Rate Student Back
+                    Rate Back
                   </button>
                 ) : null}
 
@@ -646,64 +729,67 @@ export default function Navbar({ user }) {
               </div>
             </div>
           </div>
-        </div>
-      )}
+        </div >
+      )
+      }
 
       {/* Reciprocal Rating Modal */}
-      {ratingModal.isOpen && (
-        <div className="fixed inset-0 z-[110] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-fade-in">
-          <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm overflow-hidden animate-slide-up">
-            <div className="p-6 text-center">
-              <div className="w-16 h-16 bg-yellow-100 rounded-full flex items-center justify-center mx-auto mb-4 text-yellow-500">
-                <Star size={32} fill="currentColor" />
-              </div>
+      {
+        ratingModal.isOpen && (
+          <div className="fixed inset-0 z-[110] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-fade-in">
+            <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm overflow-hidden animate-slide-up">
+              <div className="p-6 text-center">
+                <div className="w-16 h-16 bg-yellow-100 rounded-full flex items-center justify-center mx-auto mb-4 text-yellow-500">
+                  <Star size={32} fill="currentColor" />
+                </div>
 
-              <h3 className="text-xl font-bold text-dark mb-2">
-                Rate {ratingModal.targetUserName}
-              </h3>
-              <p className="text-gray text-sm mb-6">
-                How was your experience helping this student?
-              </p>
+                <h3 className="text-xl font-bold text-dark mb-2">
+                  Rate {ratingModal.targetUserName}
+                </h3>
+                <p className="text-gray text-sm mb-6">
+                  How was your experience helping this student?
+                </p>
 
-              <div className="flex justify-center gap-2 mb-8">
-                {[1, 2, 3, 4, 5].map((star) => (
+                <div className="flex justify-center gap-2 mb-8">
+                  {[1, 2, 3, 4, 5].map((star) => (
+                    <button
+                      key={star}
+                      onClick={() => setRatingModal({ ...ratingModal, rating: star })}
+                      className="transition-transform hover:scale-110 focus:outline-none"
+                    >
+                      <Star
+                        size={32}
+                        className={`${ratingModal.rating >= star ? 'text-yellow-400 fill-yellow-400' : 'text-gray-300'}`}
+                      />
+                    </button>
+                  ))}
+                </div>
+
+                <div className="flex gap-3">
                   <button
-                    key={star}
-                    onClick={() => setRatingModal({ ...ratingModal, rating: star })}
-                    className="transition-transform hover:scale-110 focus:outline-none"
+                    onClick={() => setRatingModal({ ...ratingModal, isOpen: false })}
+                    className="flex-1 py-2.5 rounded-xl border border-gray/20 text-dark font-semibold hover:bg-gray-50 transition-colors"
+                    disabled={isProcessing}
                   >
-                    <Star
-                      size={32}
-                      className={`${ratingModal.rating >= star ? 'text-yellow-400 fill-yellow-400' : 'text-gray-300'}`}
-                    />
+                    Later
                   </button>
-                ))}
-              </div>
-
-              <div className="flex gap-3">
-                <button
-                  onClick={() => setRatingModal({ ...ratingModal, isOpen: false })}
-                  className="flex-1 py-2.5 rounded-xl border border-gray/20 text-dark font-semibold hover:bg-gray-50 transition-colors"
-                  disabled={isProcessing}
-                >
-                  Later
-                </button>
-                <button
-                  onClick={handleSubmitReciprocalRating}
-                  disabled={isProcessing || ratingModal.rating === 0}
-                  className="flex-1 py-2.5 rounded-xl bg-accent text-white font-semibold hover:bg-accent/90 transition-colors shadow-lg shadow-accent/20 flex items-center justify-center disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  {isProcessing ? (
-                    <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                  ) : (
-                    'Submit'
-                  )}
-                </button>
+                  <button
+                    onClick={handleSubmitReciprocalRating}
+                    disabled={isProcessing || ratingModal.rating === 0}
+                    className="flex-1 py-2.5 rounded-xl bg-accent text-white font-semibold hover:bg-accent/90 transition-colors shadow-lg shadow-accent/20 flex items-center justify-center disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {isProcessing ? (
+                      <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                    ) : (
+                      'Submit'
+                    )}
+                  </button>
+                </div>
               </div>
             </div>
           </div>
-        </div>
-      )}
+        )
+      }
     </>
   )
 }
