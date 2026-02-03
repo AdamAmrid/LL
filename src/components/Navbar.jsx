@@ -4,8 +4,7 @@ import { signOut } from 'firebase/auth'
 import { collection, query, where, onSnapshot, orderBy, limit, updateDoc, doc, getDocs, getDoc, addDoc, serverTimestamp } from 'firebase/firestore'
 import { db, auth } from '../firebase'
 import { Menu, X, LogOut, User, BookOpen, Bell, MessageSquare, Star } from 'lucide-react'
-import UM6PLogo from './UM6PLogo'
-import SCILogo from './SCILogo'
+
 
 const navItems = [
   { to: '/', label: 'Home' },
@@ -306,11 +305,8 @@ export default function Navbar({ user }) {
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between h-20">
             {/* Logo */}
-            <Link to={isAdmin ? "/admin" : "/"} className="flex items-center gap-3 group">
-              <UM6PLogo className="h-10 sm:h-12" />
-              <div className="hidden sm:block">
-                <SCILogo iconSize="h-8 sm:h-10" showText={false} className="opacity-80" />
-              </div>
+            <Link to={isAdmin ? "/admin" : "/"} className="flex items-center gap-1 group">
+              <img src="/logo.png" alt="Logo" className="h-14 sm:h-16 w-auto object-contain" />
               <div className="hidden sm:flex flex-col">
                 <span className="text-[11px] tracking-wide text-dark/80 hidden xl:block">A UM6P Student Initiative</span>
                 <span className="text-lg sm:text-xl font-mont font-extrabold text-dark group-hover:text-accent transition-colors duration-300">USN - UM6P Solidarity Network</span>

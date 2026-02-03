@@ -11,7 +11,7 @@ const values = [
 
 const steps = [
   { icon: Sparkles, title: 'Request or Offer Help', desc: 'Students fill out simple forms' },
-  { icon: Workflow, title: 'We Match', desc: 'Our team connects requests with offers' },
+  { icon: Workflow, title: 'You Choose', desc: 'You select the helper that best fits your needs' },
   { icon: HandHeart, title: 'Connect & Support', desc: 'Students help each other thrive' },
 ]
 

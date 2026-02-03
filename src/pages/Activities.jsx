@@ -4,17 +4,17 @@ import { Calendar, MapPin, Users, Image as ImageIcon } from 'lucide-react'
 const upcomingActivities = [
     {
         title: 'Study Night Marathon',
-        date: 'Dec 15, 2025',
+        date: 'Feb 07, 2026',
         location: 'Learning Center',
         desc: 'Join us for a collective study session with snacks and peer tutors available.',
-        image: '/placeholder-activity-1.jpg' // Placeholder
+        image: '/activities/latenight.jpg'
     },
     {
         title: 'Well-being Workshop',
-        date: 'Jan 10, 2026',
+        date: 'Feb 14, 2026',
         location: 'Student Center',
         desc: 'A workshop on managing stress and building resilience during exam season.',
-        image: '/placeholder-activity-2.jpg' // Placeholder
+        image: '/activities/wellbeing.jpg'
     },
 ]
 
@@ -40,21 +40,46 @@ export default function Activities() {
 
             {/* Upcoming Activities */}
             <Section id="upcoming" title="Upcoming Activities" className="py-8">
-                <div className="bg-white rounded-2xl p-12 shadow-um6p border border-gray/10 text-center">
-                    <h3 className="font-mont font-bold text-2xl text-dark mb-4">Coming Soon</h3>
-                    <p className="text-gray text-lg">
-                        We are currently planning our next outreach activities. Stay tuned for updates!
-                    </p>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                    {upcomingActivities.map((activity, index) => (
+                        <div key={index} className="bg-white rounded-2xl overflow-hidden shadow-um6p border border-gray/10 hover:shadow-lg transition-all duration-300">
+                            <div className="h-48 overflow-hidden">
+                                <img
+                                    src={activity.image}
+                                    alt={activity.title}
+                                    className="w-full h-full object-cover hover:scale-105 transition-transform duration-500"
+                                />
+                            </div>
+                            <div className="p-6">
+                                <div className="flex items-center gap-4 text-sm text-gray mb-3">
+                                    <div className="flex items-center gap-1">
+                                        <Calendar size={16} className="text-accent" />
+                                        <span>{activity.date}</span>
+                                    </div>
+                                    <div className="flex items-center gap-1">
+                                        <MapPin size={16} className="text-accent" />
+                                        <span>{activity.location}</span>
+                                    </div>
+                                </div>
+                                <h3 className="font-mont font-bold text-xl text-dark mb-2">{activity.title}</h3>
+                                <p className="text-gray text-sm">{activity.desc}</p>
+                            </div>
+                        </div>
+                    ))}
                 </div>
             </Section>
 
-            {/* Gallery (Placeholder) */}
+            {/* Gallery */}
             <Section id="gallery" title="Activity Gallery" className="py-8">
                 <div className="bg-white rounded-2xl p-8 sm:p-10 shadow-um6p border border-gray/10 text-center">
-                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                        {[1, 2, 3, 4].map((item) => (
-                            <div key={item} className="aspect-square bg-gray/5 rounded-xl flex items-center justify-center border border-gray/10 hover:bg-gray/10 transition-colors cursor-pointer">
-                                <ImageIcon className="text-gray/30" size={32} />
+                    <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                        {['/activities/out1.jpeg', '/activities/out2.jpeg', '/activities/out3.jpeg'].map((src, index) => (
+                            <div key={index} className="aspect-square rounded-xl overflow-hidden border border-gray/10 hover:shadow-md transition-all cursor-pointer group">
+                                <img
+                                    src={src}
+                                    alt={`Activity ${index + 1}`}
+                                    className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500"
+                                />
                             </div>
                         ))}
                     </div>

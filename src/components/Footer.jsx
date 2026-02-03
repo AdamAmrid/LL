@@ -1,6 +1,6 @@
 import { Link } from 'react-router-dom'
 import { Facebook, Instagram, Linkedin } from 'lucide-react'
-import SCILogo from './SCILogo'
+
 
 const footerSections = [
   {
@@ -53,10 +53,10 @@ export default function Footer() {
               <nav aria-label={section.title} className="space-y-2">
                 {section.links.map((link) => {
                   const LinkComponent = link.external ? 'a' : Link
-                  const linkProps = link.external 
+                  const linkProps = link.external
                     ? { href: link.to, target: '_blank', rel: 'noopener noreferrer' }
                     : { to: link.to }
-                  
+
                   return (
                     <LinkComponent
                       key={link.label}
@@ -75,14 +75,15 @@ export default function Footer() {
         {/* USN Info and Social Media */}
         <div className="mt-12 pt-8 border-t border-white/20">
           <div className="flex flex-col md:flex-row justify-between items-center gap-6">
-            <div>
-              <h3 className="font-mont font-extrabold text-xl mb-2">USN - UM6P Solidarity Network</h3>
-              <p className="text-sm text-white/70 mb-3">A Student Initiative at UM6P</p>
-              <p className="text-sm text-white/70">Ben Guerir and Rabat Campuses, Morocco</p>
-              <div className="mt-3">
-                <SCILogo iconSize="h-10 sm:h-12" />
+            <div className="flex flex-col sm:flex-row items-center gap-4 text-center sm:text-left">
+              <img src="/logo.png" alt="Logo" className="h-14 sm:h-16 w-auto object-contain" />
+              <div>
+                <h3 className="font-mont font-extrabold text-xl mb-1">USN - UM6P Solidarity Network</h3>
+                <p className="text-sm text-white/70">A Student Initiative at UM6P</p>
+                <p className="text-sm text-white/70">Ben Guerir and Rabat Campuses, Morocco</p>
               </div>
             </div>
+
             <div className="flex items-center gap-4">
               <a
                 href="#"
