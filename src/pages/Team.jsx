@@ -167,7 +167,7 @@ export default function Team() {
           {/* Organizational Chart Link */}
           <div className="flex justify-center pt-8">
             <a
-              href="https://descriptive-crater-add.notion.site/Organizational-Structure-2f163097f303807bbcf0e357a47f1313"
+              href="https://zaamoun.notion.site/Big-5-4-2fd63097f303803db3adefd4c41d9fe2"
               target="_blank"
               rel="noopener noreferrer"
               className="inline-flex items-center gap-2 px-6 py-3 bg-white border border-gray/20 rounded-xl shadow-sm text-dark font-semibold hover:bg-gray-50 hover:text-accent transition-colors"
